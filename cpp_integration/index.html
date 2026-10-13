@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第四关 · 兵器期：C++ 连接数据库 · 导航</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface-2: #334155;
+    --ink: #f1f5f9;
+    --ink-muted: #94a3b8;
+    --ink-dim: #64748b;
+    --rule: #334155;
+    --accent: #38bdf8;
+    --accent-2: #818cf8;
+    --ok: #4ade80;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --mono: "Consolas", "Cascadia Mono", "Courier New", ui-monospace, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                 "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+    font-size: 14px;
+    padding-bottom: 80px;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px; }
+  header h1 {
+    font-size: 1.75rem;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    margin-bottom: 6px;
+  }
+  header .sub { color: var(--ink-muted); font-size: .95rem; }
+  header .badge {
+    display: inline-block; margin-top: 10px; margin-right: 8px;
+    padding: 3px 10px; border-radius: 999px; font-size: .76rem;
+    background: rgba(56,189,248,.12); color: var(--accent);
+    border: 1px solid rgba(56,189,248,.3);
+    font-family: var(--mono);
+  }
+  header .badge.warn { background: rgba(251,191,36,.12); color: var(--warn); border-color: rgba(251,191,36,.3); }
+  section { margin-top: 30px; }
+  h2 {
+    font-size: 1.1rem; color: var(--accent);
+    padding-left: 11px; border-left: 3px solid var(--accent-2);
+    margin-bottom: 14px;
+  }
+  .card {
+    background: var(--surface); border: 1px solid var(--rule);
+    border-radius: 10px; padding: 16px 18px; margin-bottom: 12px;
+  }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
+  a.file {
+    display: block; text-decoration: none; color: inherit;
+    background: var(--surface); border: 1px solid var(--rule);
+    border-radius: 10px; padding: 14px 16px; margin-bottom: 12px;
+    transition: border-color .15s, transform .15s;
+  }
+  a.file:hover { border-color: var(--accent); transform: translateY(-2px); }
+  a.file .name { font-family: var(--mono); color: var(--accent); font-size: .95rem; font-weight: 600; }
+  a.file .tag {
+    float: right; font-size: .72rem; padding: 2px 8px; border-radius: 999px;
+    background: var(--surface-2); color: var(--ink-muted); font-family: var(--mono);
+  }
+  a.file .tag.no { background: rgba(251,191,36,.14); color: var(--warn); }
+  a.file .desc { color: var(--ink-muted); margin-top: 6px; font-size: .87rem; }
+  a.file .must { color: var(--ink-dim); margin-top: 8px; font-size: .82rem; }
+  a.file .must b { color: var(--accent-2); font-weight: 600; }
+  pre {
+    background: #0b1220; border: 1px solid var(--rule); border-radius: 8px;
+    padding: 13px 15px; overflow-x: auto; font-family: var(--mono);
+    font-size: .83rem; line-height: 1.75; color: #cbd5e1;
+  }
+  pre .c { color: var(--ink-dim); }
+  pre .k { color: var(--accent); }
+  pre .w { color: var(--warn); }
+  pre .g { color: var(--ok); }
+  table { width: 100%; border-collapse: collapse; font-size: .87rem; }
+  th, td { padding: 9px 11px; border-bottom: 1px solid var(--rule); text-align: left; vertical-align: top; }
+  th { color: var(--accent); font-weight: 600; background: rgba(56,189,248,.06); }
+  td.mono, th.mono { font-family: var(--mono); font-size: .82rem; }
+  td.num { font-family: var(--mono); text-align: right; }
+  .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0 2px; }
+  .flow .step {
+    background: var(--surface-2); border: 1px solid var(--rule); border-radius: 8px;
+    padding: 7px 12px; font-family: var(--mono); font-size: .8rem; color: var(--ink);
+  }
+  .flow .arr { color: var(--accent-2); font-size: 1rem; }
+  .flow .step.bad { border-color: rgba(248,113,113,.5); color: var(--bad); }
+  .note {
+    border-left: 3px solid var(--warn); background: rgba(251,191,36,.07);
+    padding: 11px 14px; border-radius: 0 8px 8px 0; color: #e2e8f0; font-size: .88rem;
+  }
+  .note.bad { border-left-color: var(--bad); background: rgba(248,113,113,.07); }
+  .note.ok { border-left-color: var(--ok); background: rgba(74,222,128,.07); }
+  .measured { color: var(--ok); font-family: var(--mono); }
+  .foot { margin-top: 34px; color: var(--ink-dim); font-size: .82rem; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>第四关 · 兵器期 —— 用 C++ 把数据库接起来</h1>
+  <div class="sub">老师傅带徒弟 · 简体中文 · 本机 g++ 15.2 + SQLite 3.51.1 实测可跑</div>
+  <div>
+    <span class="badge">g++ 15.2 (MSYS2 UCRT64)</span>
+    <span class="badge">SQLite 3.51.1</span>
+    <span class="badge">C++17</span>
+    <span class="badge warn">本机无 MySQL / 无 CMake</span>
+  </div>
+</header>
+
+<section>
+  <h2>先读这个</h2>
+  <div class="card">
+    <p>本关四个 C++ 文件是一条完整成长线，<b>顺序不能打乱</b>：先被裸 API 的脏活硌一下，
+    再理解封装防的是什么；先单线程跑通，再把并发和锁冲突抓出来；最后才谈真数据库和 ORM。</p>
+    <div class="flow">
+      <span class="step">01 裸 C API + 注入</span><span class="arr">→</span>
+      <span class="step">02 RAII 封装</span><span class="arr">→</span>
+      <span class="step">03 连接池 + 并发</span><span class="arr">→</span>
+      <span class="step">04 MySQL / ORM 边界</span>
+    </div>
+    <p style="margin-top:10px;color:var(--ink-muted)">完整讲解、实测数据、七条课后练习在同目录 <b style="color:var(--accent)">tutorial.md</b>。这个页面只做导航和命令速查。</p>
+  </div>
+</section>
+
+<section>
+  <h2>编译命令速查表（PowerShell 直接粘）</h2>
+  <div class="card">
+<pre><span class="c"># 0) 进入目录</span>
+cd d:\Users\Desktop\database\database-learning-path\cpp_integration
+
+<span class="c"># 1) 三个连 SQLite 的文件：都要带 -lsqlite3</span>
+g++ -std=c++17 -O2 -Wall -Wextra 01_sqlite_c_api.cpp    -o 01.exe <span class="k">-lsqlite3</span>
+g++ -std=c++17 -O2 -Wall -Wextra 02_raii_wrapper.cpp    -o 02.exe <span class="k">-lsqlite3</span>
+g++ -std=c++17 -O2 -Wall -Wextra 03_thread_pool_db.cpp  -o 03.exe <span class="k">-lsqlite3</span>
+
+<span class="c"># 2) 第四个文件不碰数据库，不需要 -lsqlite3（外部驱动代码在 #ifdef 里）</span>
+g++ -std=c++17 -O2 -Wall -Wextra 04_mysql_and_orm.cpp   -o 04.exe
+
+<span class="c"># 3) 跑</span>
+.\01.exe
+.\02.exe            <span class="c"># 默认 N=10000，逐条提交那段实测约 119 秒，别当卡死</span>
+.\02.exe 500        <span class="c"># 想两秒看完就带个小 N（实测 4.5 秒）</span>
+.\03.exe            <span class="c"># 默认 4 线程 × 120 轮 × 每事务 20 条</span>
+.\03.exe 8 200 50   <span class="c"># 加大并发：反面教材那段撞锁次数会明显上去</span>
+.\04.exe
+
+<span class="c"># 4) 收尾清理（程序正常运行会自删临时库；中途 Ctrl+C 过就得手动）</span>
+Remove-Item *.exe, *.db, *.db-wal, *.db-shm, *.db-journal -ErrorAction SilentlyContinue</pre>
+    <div class="note" style="margin-top:12px">
+      找不到 <b>-lsqlite3</b> 时的全路径写法（本机实测存在）：
+      <span class="mono">-I C:\msys64\ucrt64\include</span> 和
+      <span class="mono">C:\msys64\ucrt64\lib\libsqlite3.a</span> 直接写进命令行即可。
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>文件清单与学习重点</h2>
+
+  <a class="file" href="01_sqlite_c_api.cpp">
+    <span class="tag">需 -lsqlite3</span>
+    <div class="name">01_sqlite_c_api.cpp</div>
+    <div class="desc">裸 C API 全流程：open → exec → prepare → bind → step → column → finalize → close。</div>
+    <div class="must">重点：<b>SQL 注入真的会删表</b>（场景 C 的 <span class="mono">admin'; DROP TABLE sessions; --</span> 把 sessions 表真删了，
+      后续查询报 <span class="mono">no such table: sessions</span>）；对照参数化查询命中 0 行。
+      另外记死 <b>finalize 不是可选项</b>、<b>errmsg 才是错误现场</b>。</div>
+  </a>
+
+  <a class="file" href="02_raii_wrapper.cpp">
+    <span class="tag">需 -lsqlite3</span>
+    <div class="name">02_raii_wrapper.cpp</div>
+    <div class="desc">四个 move-only 的 RAII 类：<span class="mono">Db</span> / <span class="mono">Stmt</span> / <span class="mono">Row</span> / <span class="mono">Transaction</span>，配 <span class="mono">SqliteError</span> 异常与 <span class="mono">[[nodiscard]]</span>。</div>
+    <div class="must">重点：<b>Row 必须深拷贝</b>（column_text 的指针下次 step 就作废）；
+      <b>析构不能抛异常</b>，所以 commit 失败必须在 commit() 里抛；
+      <b>事务是性能第一开关</b> —— 本机实测逐条 119144.8ms vs 单事务 16.5ms。</div>
+  </a>
+
+  <a class="file" href="03_thread_pool_db.cpp">
+    <span class="tag">需 -lsqlite3</span>
+    <div class="name">03_thread_pool_db.cpp</div>
+    <div class="desc">固定大小连接池（mutex + condition_variable + <span class="mono">ConnectionGuard</span> RAII 归还）与四种并发策略对照，含 WAL / busy_timeout / 指数退避重试。</div>
+    <div class="must">重点：<b>busy 必须走返回值，不能走异常</b>（师傅第一版就踩了，
+      失败 360 次而撞锁计数打印 0）；<b>ROLLBACK 前先把 errmsg 取走</b>；
+      <b>脏连接归还进池 = 全服写不进去</b>。可配 <span class="mono">sqlite3_get_autocommit()</span> 判事务状态。</div>
+  </a>
+
+  <a class="file" href="04_mysql_and_orm.cpp">
+    <span class="tag no">不需要 -lsqlite3</span>
+    <div class="name">04_mysql_and_orm.cpp</div>
+    <div class="desc">MySQL Connector/C++ 与 ODBC 的完整用法写在 <span class="mono">#ifdef</span> 里（本机未装，不参与编译）；
+      编译路径里放的是<b>能跑的编译期列映射</b>和 N+1 / autocommit 成本模型。</div>
+    <div class="must">重点：<b>网络往返是真数据库的头号成本</b>（所以要池化 + 合并往返）；
+      <b>utf8mb4 不是 utf8</b>；<b>rewriteBatchedStatements 不开，批处理是假的</b>；
+      ORM 的六类逃生场景。<b>本机关未安装 MySQL，外部驱动代码仅作工程参考。</b></div>
+  </a>
+
+  <a class="file" href="connpool_animator.html">
+    <span class="tag">纯前端</span>
+    <div class="name">connpool_animator.html</div>
+    <div class="desc">连接池可视化沙盘：M 个连接槽位 + 等待队列 + 请求球，可调池大小 / 到达速率 / 单请求耗时，
+      三种策略（每次新建 / 无界并发 / 固定池）对比，实时看平均等待、超时数、吞吐。</div>
+    <div class="must">重点：亲手把池调小，看<b>平均等待</b>怎么涨、<b>超时数</b>怎么起飞的。</div>
+  </a>
+
+  <a class="file" href="tutorial.md">
+    <span class="tag">必读</span>
+    <div class="name">tutorial.md</div>
+    <div class="desc">模块简介、学习目标、学习顺序、七条常见坑、本机实测数据全表、七条课后练习。</div>
+  </a>
+</section>
+
+<section>
+  <h2>本机实测数据（不是抄来的，你自己跑能复现）</h2>
+  <div class="card">
+    <table>
+      <thead>
+        <tr><th>来源</th><th>测什么</th><th class="num">实测值</th><th>结论</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="mono">02 N=10000</td><td>逐条自动提交</td><td class="num">119144.8 ms</td><td rowspan="3">事务是性能第一开关；单事务比逐条快 <span class="measured">7217.4 倍</span>。倍数随机器变，"两三个数量级"到处成立。</td></tr>
+        <tr><td class="mono">02 N=10000</td><td>单事务批量提交</td><td class="num">16.5 ms</td></tr>
+        <tr><td class="mono">02 N=10000</td><td>每 500 条一事务</td><td class="num">563.0 ms</td></tr>
+        <tr><td class="mono">02</td><td>建索引耗时</td><td class="num">26.1 ms</td><td>建索引比导入 10000 行（14.0ms）还慢 —— 索引不是白送的。</td></tr>
+        <tr><td class="mono">02</td><td>N+1（50 次单查）vs 一条聚合</td><td class="num">13.73 / 3.37 ms</td><td>贵的是往返次数，不是数据量。</td></tr>
+        <tr><td class="mono">03 反面教材</td><td>busy_timeout=0 不重试</td><td class="num">失败 360 / 撞锁 360</td><td>原文 <span class="mono">"database is locked"</span>(rc=5)。库里行数 2400 与写入行数一致，证明没写丢。</td></tr>
+        <tr><td class="mono">03</td><td>每次新建连接</td><td class="num">1814.8 ms</td><td>建连 658 次，5290 行/秒；建连阶段的 <span class="mono">PRAGMA journal_mode=WAL</span> 本身也会撞锁。</td></tr>
+        <tr><td class="mono">03</td><td>单连接串行</td><td class="num">332950 行/秒</td><td>永远不报错，因为它根本没并发 —— 别把"没报错"当"解决了"。</td></tr>
+        <tr><td class="mono">03</td><td>连接池 + busy_timeout</td><td class="num">162774 行/秒</td><td>480/480 全部成功，建连只 2 次。</td></tr>
+        <tr><td class="mono">03</td><td>池从 4 压到 2</td><td class="num">257173 行/秒</td><td>SQLite 只有一个 writer，池小反而更快。<b>池越大越好</b>是想当然。</td></tr>
+      </tbody>
+    </table>
+    <p style="margin-top:12px;color:var(--ink-dim);font-size:.84rem">
+      04 号文件里的 N+1（86 倍）与 autocommit（3750 倍）是<b>成本模型算出来的</b>，不是实测 ——
+      本机没有 MySQL。页面上把"实测"和"模型"分开标注，师傅不编数字。
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2>三条最容易被忽略、代价最大的纪律</h2>
+  <div class="card">
+    <div class="note bad">
+      <b>一、锁冲突是正常事件，不是异常事件。</b>
+      SQLITE_BUSY / HTTP 429 / RPC deadline exceeded 一律用返回值表达。
+      用异常表达，你的统计就会说谎 —— 03 号文件里师傅亲眼看见"失败 360 次，撞锁 0 次"。
+    </div>
+    <div class="note" style="margin-top:10px">
+      <b>二、连接还回池子之前必须是干净的。</b>
+      事务失败必须 ROLLBACK（用 <span class="mono">sqlite3_get_autocommit()</span> 判断是否真挂着事务）。
+      带病连接进池 = 一个线程出错、全服写不进去，而且像随机故障。
+    </div>
+    <div class="note ok" style="margin-top:10px">
+      <b>三、任何 ORM / 驱动，上线前把它真正发出去的 SQL 看一遍。</b>
+      MySQL general_log、PG log_statement='all'、SQLite sqlite3_trace_v2。
+      没看过生成 SQL 就用 ORM，等于闭眼开车。
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>环境核对（跑之前先确认这三行都返回 True）</h2>
+  <div class="card">
+<pre>Test-Path C:\msys64\ucrt64\include\sqlite3.h    <span class="c"># True</span>
+Test-Path C:\msys64\ucrt64\lib\libsqlite3.a     <span class="c"># True</span>
+g++ --version                                    <span class="c"># g++.exe (MSYS2 UCRT64) 15.2.0</span></pre>
+    <p style="margin-top:10px;color:var(--ink-muted)">
+      中文输出乱码的话，源码里已经调了 <span class="mono">SetConsoleOutputCP(65001)</span>；
+      如果仍乱码，在 PowerShell 里执行 <span class="mono">chcp 65001</span> 再跑。
+    </p>
+  </div>
+</section>
+
+<div class="foot">
+  第四关 · 兵器期 · C++ 连接数据库 ｜ 下一关：第七关 · 大师期 · 手搓迷你数据库（../minidb/）
+</div>
+
+</div>
+</body>
+</html>

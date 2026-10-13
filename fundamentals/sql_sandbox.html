@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SQL 沙盒 · 迷你 SQL 求值器（离线）</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface-2: #334155;
+    --ink: #f1f5f9;
+    --ink-muted: #94a3b8;
+    --ink-dim: #64748b;
+    --rule: #334155;
+    --accent: #38bdf8;
+    --accent-2: #818cf8;
+    --ok: #4ade80;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --mono: "Consolas", "Cascadia Mono", "Courier New", ui-monospace, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                 "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+    font-size: 14px;
+    padding-bottom: 60px;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px; }
+
+  header { margin-bottom: 20px; }
+  header h1 {
+    font-size: 1.7rem;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 6px;
+  }
+  header p { color: var(--ink-muted); font-size: 13px; }
+  header .links { margin-top: 8px; font-size: 12px; }
+  header .links a { color: var(--accent); text-decoration: none; margin-right: 14px; }
+  header .links a:hover { text-decoration: underline; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 260px;
+    gap: 16px;
+    align-items: start;
+  }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .panel h2 {
+    font-size: 13px;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 10px;
+  }
+
+  textarea#sql {
+    width: 100%;
+    min-height: 132px;
+    background: #0b1220;
+    color: var(--ink);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-family: var(--mono);
+    font-size: 14px;
+    line-height: 1.7;
+    resize: vertical;
+    outline: none;
+  }
+  textarea#sql:focus { border-color: var(--accent); }
+
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center; }
+  button {
+    font-family: inherit;
+    font-size: 13px;
+    border-radius: 7px;
+    padding: 7px 14px;
+    border: 1px solid var(--rule);
+    background: var(--surface-2);
+    color: var(--ink);
+    cursor: pointer;
+    transition: border-color .15s, background .15s, transform .1s;
+  }
+  button:hover { border-color: var(--accent); }
+  button:active { transform: translateY(1px); }
+  button.run {
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #0b1220;
+    font-weight: 700;
+    border: none;
+    padding: 8px 22px;
+  }
+  button.ex {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-muted);
+    text-align: left;
+  }
+  button.ex:hover { color: var(--ink); }
+  .hint { color: var(--ink-dim); font-size: 12px; margin-left: auto; }
+
+  .schema { font-size: 12px; color: var(--ink-muted); }
+  .schema .tbl { margin-bottom: 12px; }
+  .schema .tname { color: var(--accent-2); font-family: var(--mono); font-weight: 700; }
+  .schema ul { list-style: none; padding-left: 12px; margin-top: 3px; }
+  .schema li { font-family: var(--mono); color: var(--ink-dim); }
+  .schema li b { color: var(--ink-muted); font-weight: 400; }
+  .schema .note {
+    margin-top: 6px; padding-top: 8px; border-top: 1px dashed var(--rule);
+    color: var(--ink-dim); font-size: 11.5px; line-height: 1.6;
+  }
+
+  /* 结果统计 */
+  .stats { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 10px; }
+  .stat {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 8px 14px;
+    min-width: 128px;
+  }
+  .stat.scan { border-left-color: var(--warn); }
+  .stat.hit { border-left-color: var(--ok); }
+  .stat.err { border-left-color: var(--bad); }
+  .stat .k { font-size: 11px; color: var(--ink-dim); letter-spacing: .04em; }
+  .stat .v { font-size: 20px; font-family: var(--mono); color: var(--ink); }
+
+  /* 结果表 */
+  .tablebox { overflow-x: auto; border-radius: 10px; border: 1px solid var(--rule); }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { padding: 7px 12px; text-align: left; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+  th {
+    background: #0b1220;
+    color: var(--accent);
+    font-family: var(--mono);
+    font-weight: 700;
+    position: sticky; top: 0;
+  }
+  tbody tr:nth-child(even) { background: rgba(148, 163, 184, 0.05); }
+  tbody tr:hover { background: rgba(56, 189, 248, 0.10); }
+  td.num { font-family: var(--mono); color: #a5f3fc; }
+  td.nullv { color: var(--bad); font-style: italic; opacity: .8; }
+  td.txt { color: var(--ink); }
+  .empty { padding: 18px; color: var(--ink-dim); text-align: center; }
+
+  /* 底部提示条 */
+  #explain {
+    margin-top: 16px;
+    background: linear-gradient(135deg, rgba(56,189,248,0.10), rgba(129,140,248,0.10));
+    border: 1px solid var(--accent);
+    border-left-width: 4px;
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 13.5px;
+    line-height: 1.75;
+  }
+  #explain.error { border-color: var(--bad); background: rgba(248,113,113,0.10); }
+  #explain .lead { color: var(--accent); font-weight: 700; }
+  #explain.error .lead { color: var(--bad); }
+  #explain code {
+    font-family: var(--mono);
+    background: rgba(11,18,32,.7);
+    padding: 1px 5px;
+    border-radius: 4px;
+    color: #e2e8f0;
+  }
+  .errpos {
+    font-family: var(--mono);
+    background: #0b1220;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-top: 8px;
+    white-space: pre-wrap;
+    color: var(--ink-muted);
+    font-size: 12.5px;
+  }
+  .errpos .caret { color: var(--bad); }
+  footer { margin-top: 22px; color: var(--ink-dim); font-size: 12px; }
+  footer code { font-family: var(--mono); color: var(--ink-muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🧪 SQL 沙盒 · 手写的迷你 SQL 求值器</h1>
+    <p>
+      这里没有 SQLite，只有一份静态数据和一段纯 JS 写的"迷你查询引擎"。
+      你自己就是数据库——它老老实实一行一行扫，所以「扫描行数」永远等于全表行数。
+    </p>
+    <p class="links">
+      <a href="index.html">← 返回模块导航</a>
+      <a href="join_visualizer.html">下一个：JOIN 交互动画 →</a>
+    </p>
+  </header>
+
+  <div class="grid">
+    <div class="panel">
+      <h2>写 SQL（支持 Ctrl+Enter 运行）</h2>
+      <textarea id="sql" spellcheck="false">SELECT name, age, city
+FROM readers
+WHERE city = '北京'
+ORDER BY age DESC
+LIMIT 3;</textarea>
+      <div class="toolbar">
+        <button class="run" id="runBtn">▶ 运行</button>
+        <button class="ex" data-q="SELECT * FROM loans WHERE return_date IS NULL;">查未还记录</button>
+        <button class="ex" data-q="SELECT title, price FROM books WHERE price > 90 ORDER BY price DESC;">高价图书</button>
+        <button class="ex" data-q="SELECT name, age, city FROM readers WHERE age >= 30 AND city IN ('北京', '上海');">大龄沪京读者</button>
+        <button class="ex" data-q="SELECT title FROM books WHERE title LIKE '%年%';">书名模糊匹配</button>
+        <button class="ex" data-q="SELECT name, age FROM readers WHERE city = '广州' ORDER BY age DESC LIMIT 1;">广州最年长读者</button>
+        <span class="hint">沙盒只支持单表 SELECT，JOIN 请看动画页</span>
+      </div>
+    </div>
+
+    <div class="panel schema">
+      <h2>库里有这三张表</h2>
+      <div class="tbl"><span class="tname">readers</span> · 10 行
+        <ul>
+          <li>reader_id <b>主键</b></li>
+          <li>name</li>
+          <li>age</li>
+          <li>city</li>
+          <li>join_date</li>
+        </ul>
+      </div>
+      <div class="tbl"><span class="tname">books</span> · 12 行
+        <ul>
+          <li>book_id <b>主键</b></li>
+          <li>title</li>
+          <li>category</li>
+          <li>price</li>
+          <li>stock</li>
+        </ul>
+      </div>
+      <div class="tbl"><span class="tname">loans</span> · 16 行
+        <ul>
+          <li>loan_id <b>主键</b></li>
+          <li>reader_id <b>外键</b></li>
+          <li>book_id <b>外键</b></li>
+          <li>loan_date</li>
+          <li>return_date <b>可空</b></li>
+        </ul>
+      </div>
+      <div class="note">
+        支持的语法：<br>
+        <code>SELECT 列 | * | 列 AS 别名</code><br>
+        <code>FROM 表</code><br>
+        <code>WHERE</code> 支持 <code>= != &lt;&gt; &gt; &gt;= &lt; &lt;= AND OR NOT</code>、
+        <code>LIKE</code>（% 和 _）、<code>IS [NOT] NULL</code>、<code>IN (...)</code>、括号<br>
+        <code>ORDER BY 列 [ASC|DESC] [, ...]</code><br>
+        <code>LIMIT n [OFFSET m]</code>
+      </div>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat scan"><div class="k">扫描行数（全表）</div><div class="v" id="statScan">-</div></div>
+    <div class="stat hit"><div class="k">命中行数</div><div class="v" id="statHit">-</div></div>
+    <div class="stat"><div class="k">条件判断次数</div><div class="v" id="statCmp">-</div></div>
+    <div class="stat"><div class="k">本库总行数</div><div class="v" id="statTotal">-</div></div>
+  </div>
+
+  <div class="tablebox" id="resultBox">
+    <div class="empty">点「运行」看看结果。</div>
+  </div>
+
+  <div id="explain" hidden>
+    <span class="lead">这条 SQL 干了什么：</span><span id="explainText"></span>
+  </div>
+
+  <footer>
+    想验证真货？在 PowerShell 里跑
+    <code>sqlite3 -bail :memory: ".read 01_sql_tour.sql"</code>
+    ——沙盒里的数据和那个文件一模一样，同一句 SQL 两边结果应当一致。
+  </footer>
+</div>
+
+<script>
+"use strict";
+
+/* =====================================================================
+   静态数据：与 01_sql_tour.sql 完全一致
+   ===================================================================== */
+var DB = {
+  readers: {
+    columns: ["reader_id", "name", "age", "city", "join_date"],
+    rows: [
+      { reader_id: 1,  name: "张伟", age: 28, city: "北京", join_date: "2023-01-15" },
+      { reader_id: 2,  name: "李娜", age: 34, city: "上海", join_date: "2023-03-02" },
+      { reader_id: 3,  name: "王强", age: 22, city: "北京", join_date: "2023-05-20" },
+      { reader_id: 4,  name: "刘洋", age: 41, city: "广州", join_date: "2022-11-08" },
+      { reader_id: 5,  name: "陈静", age: 29, city: "上海", join_date: "2024-01-10" },
+      { reader_id: 6,  name: "杨帆", age: 35, city: "深圳", join_date: "2024-02-18" },
+      { reader_id: 7,  name: "赵磊", age: 19, city: "北京", join_date: "2024-06-01" },
+      { reader_id: 8,  name: "孙悦", age: 45, city: "广州", join_date: "2021-09-30" },
+      { reader_id: 9,  name: "周涛", age: 31, city: "成都", join_date: "2023-08-14" },
+      { reader_id: 10, name: "吴敏", age: 26, city: "上海", join_date: "2024-03-25" }
+    ]
+  },
+  books: {
+    columns: ["book_id", "title", "category", "price", "stock"],
+    rows: [
+      { book_id: 1,  title: "C++ Primer",          category: "编程",   price: 128, stock: 5 },
+      { book_id: 2,  title: "Effective C++",       category: "编程",   price: 69,  stock: 3 },
+      { book_id: 3,  title: "深入理解计算机系统",   category: "编程",   price: 139, stock: 4 },
+      { book_id: 4,  title: "数据库系统概念",       category: "数据库", price: 118, stock: 6 },
+      { book_id: 5,  title: "SQL必知必会",         category: "数据库", price: 49,  stock: 8 },
+      { book_id: 6,  title: "人类简史",             category: "历史",   price: 68,  stock: 10 },
+      { book_id: 7,  title: "万历十五年",           category: "历史",   price: 45,  stock: 4 },
+      { book_id: 8,  title: "三体",                 category: "科幻",   price: 98,  stock: 12 },
+      { book_id: 9,  title: "流浪地球",             category: "科幻",   price: 39,  stock: 5 },
+      { book_id: 10, title: "百年孤独",             category: "文学",   price: 55,  stock: 7 },
+      { book_id: 11, title: "活着",                 category: "文学",   price: 39,  stock: 9 },
+      { book_id: 12, title: "设计模式",             category: "编程",   price: 89,  stock: 2 }
+    ]
+  },
+  loans: {
+    columns: ["loan_id", "reader_id", "book_id", "loan_date", "return_date"],
+    rows: [
+      { loan_id: 1,  reader_id: 1,  book_id: 1,  loan_date: "2024-01-05", return_date: "2024-01-20" },
+      { loan_id: 2,  reader_id: 1,  book_id: 4,  loan_date: "2024-02-10", return_date: "2024-03-01" },
+      { loan_id: 3,  reader_id: 2,  book_id: 8,  loan_date: "2024-02-15", return_date: "2024-03-10" },
+      { loan_id: 4,  reader_id: 3,  book_id: 2,  loan_date: "2024-03-01", return_date: null },
+      { loan_id: 5,  reader_id: 3,  book_id: 5,  loan_date: "2024-03-12", return_date: "2024-03-25" },
+      { loan_id: 6,  reader_id: 4,  book_id: 6,  loan_date: "2024-03-20", return_date: null },
+      { loan_id: 7,  reader_id: 2,  book_id: 3,  loan_date: "2024-04-02", return_date: "2024-04-28" },
+      { loan_id: 8,  reader_id: 5,  book_id: 10, loan_date: "2024-04-10", return_date: "2024-04-22" },
+      { loan_id: 9,  reader_id: 1,  book_id: 8,  loan_date: "2024-05-01", return_date: null },
+      { loan_id: 10, reader_id: 6,  book_id: 9,  loan_date: "2024-05-06", return_date: "2024-05-30" },
+      { loan_id: 11, reader_id: 8,  book_id: 7,  loan_date: "2024-05-15", return_date: null },
+      { loan_id: 12, reader_id: 3,  book_id: 8,  loan_date: "2024-06-01", return_date: "2024-06-18" },
+      { loan_id: 13, reader_id: 9,  book_id: 1,  loan_date: "2024-06-05", return_date: null },
+      { loan_id: 14, reader_id: 2,  book_id: 5,  loan_date: "2024-06-12", return_date: "2024-06-25" },
+      { loan_id: 15, reader_id: 10, book_id: 11, loan_date: "2024-06-20", return_date: null },
+      { loan_id: 16, reader_id: 4,  book_id: 5,  loan_date: "2024-07-01", return_date: "2024-07-15" }
+    ]
+  }
+};
+
+/* =====================================================================
+   词法分析：把 SQL 字符串切成 token
+   ===================================================================== */
+function SqlError(message, sql, pos) {
+  var e = new Error(message);
+  e.sqlPos = (typeof pos === "number") ? pos : -1;
+  e.isSqlError = true;
+  return e;
+}
+
+function isWordChar(c) {
+  return (c >= "a" && c <= "z") || (c >= "A" && c <= "Z") || (c >= "0" && c <= "9") || c === "_";
+}
+function isDigit(c) { return c >= "0" && c <= "9"; }
+
+function tokenize(sql) {
+  var toks = [];
+  var i = 0;
+  var n = sql.length;
+  while (i < n) {
+    var c = sql.charAt(i);
+
+    if (c === " " || c === "\t" || c === "\n" || c === "\r") { i++; continue; }
+
+    // 行注释： -- 到行尾
+    if (c === "-" && sql.charAt(i + 1) === "-") {
+      while (i < n && sql.charAt(i) !== "\n") i++;
+      continue;
+    }
+
+    // 字符串字面量： 单引号包裹，'' 表示一个单引号
+    if (c === "'") {
+      var j = i + 1, buf = "";
+      var closed = false;
+      while (j < n) {
+        if (sql.charAt(j) === "'") {
+          if (sql.charAt(j + 1) === "'") { buf += "'"; j += 2; continue; }
+          closed = true; break;
+        }
+        buf += sql.charAt(j); j++;
+      }
+      if (!closed) throw SqlError("字符串的单引号没有闭合。SQL 里的文本必须用单引号包起来，例如 '北京'。", sql, i);
+      toks.push({ type: "str", value: buf, pos: i });
+      i = j + 1;
+      continue;
+    }
+
+    // 数字
+    if (isDigit(c) || (c === "." && isDigit(sql.charAt(i + 1)))) {
+      var k = i;
+      while (k < n && (isDigit(sql.charAt(k)) || sql.charAt(k) === ".")) k++;
+      var numText = sql.slice(i, k);
+      if (!/^(\d+(\.\d*)?|\.\d+)$/.test(numText)) {
+        throw SqlError("数字格式看不懂：" + numText, sql, i);
+      }
+      toks.push({ type: "num", value: Number(numText), pos: i });
+      i = k;
+      continue;
+    }
+
+    // 标识符 / 关键字（可带表前缀，如 readers.name）
+    if ((c >= "a" && c <= "z") || (c >= "A" && c <= "Z") || c === "_") {
+      var s = i;
+      while (s < n && isWordChar(sql.charAt(s))) s++;
+      // 吃掉 a.b 形式
+      while (s < n && sql.charAt(s) === "." && isWordChar(sql.charAt(s + 1))) {
+        s++;
+        while (s < n && isWordChar(sql.charAt(s))) s++;
+      }
+      toks.push({ type: "name", value: sql.slice(i, s), pos: i });
+      i = s;
+      continue;
+    }
+
+    // 运算符与标点（两个字符的先判）
+    var two = sql.substr(i, 2);
+    if (two === "<=" || two === ">=" || two === "<>" || two === "!=" || two === "||") {
+      toks.push({ type: "op", value: two, pos: i }); i += 2; continue;
+    }
+    if (c === "=" || c === "<" || c === ">" || c === "*" || c === "," ||
+        c === "(" || c === ")" || c === ";" || c === "%" || c === "+") {
+      toks.push({ type: "op", value: c, pos: i }); i++; continue;
+    }
+
+    throw SqlError("这个字符沙盒不认识：" + c + "（位置 " + (i + 1) + "）", sql, i);
+  }
+  toks.push({ type: "eof", value: "", pos: n });
+  return toks;
+}
+
+/* =====================================================================
+   语法分析 + 求值
+   语法（简化版 SELECT）：
+     SELECT  *  |  列 [AS 别名] {, 列 [AS 别名]}
+     FROM 表
+     [WHERE 条件]
+     [ORDER BY 列 [ASC|DESC] {, 列 [ASC|DESC]}]
+     [LIMIT n [OFFSET m]]
+   条件（三值逻辑，NULL 参与比较得 unknown）：
+     条件 OR 条件 | 条件 AND 条件 | NOT 条件 | ( 条件 )
+     值 比较符 值
+     值 IS [NOT] NULL
+     值 [NOT] LIKE 值
+     值 [NOT] IN (值 {, 值})
+   ===================================================================== */
+function Parser(toks, sql) {
+  this.t = toks;
+  this.i = 0;
+  this.sql = sql;
+  this.columns = null;   // FROM 解析完之后填入，用于校验列名
+  this.table = null;
+  this.cmpCount = 0;     // 条件判断次数（真实代价的另一个侧面）
+}
+
+Parser.prototype.peek = function () { return this.t[this.i]; };
+Parser.prototype.next = function () { return this.t[this.i++]; };
+Parser.prototype.atOp = function (v) {
+  var tk = this.peek();
+  return tk.type === "op" && tk.value === v;
+};
+Parser.prototype.atWord = function (w) {
+  var tk = this.peek();
+  return tk.type === "name" && tk.value.toUpperCase() === w;
+};
+Parser.prototype.eatWord = function (w) {
+  if (this.atWord(w)) { this.i++; return true; }
+  return false;
+};
+Parser.prototype.needWord = function (w, advice) {
+  if (!this.eatWord(w)) {
+    var tk = this.peek();
+    throw SqlError("这里应该有 " + w + "，实际看到的是" +
+      (tk.type === "eof" ? "语句结尾" : "「" + tk.value + "」") + "。" + (advice || ""),
+      this.sql, tk.pos);
+  }
+};
+Parser.prototype.eatOp = function (v) {
+  if (this.atOp(v)) { this.i++; return true; }
+  return false;
+};
+
+// 列名校验：给出"这一列都有哪些"的友好提示
+Parser.prototype.resolveColumn = function (raw, pos) {
+  var name = raw;
+  if (name.indexOf(".") >= 0) name = name.slice(name.lastIndexOf(".") + 1);
+  var lower = name.toLowerCase();
+  for (var k = 0; k < this.columns.length; k++) {
+    if (this.columns[k].toLowerCase() === lower) return this.columns[k];
+  }
+  var tk = this.t[this.i - 1];
+  var at = (typeof pos === "number") ? pos : (tk ? tk.pos : -1);
+  throw SqlError("表 " + this.table + " 里没有叫 「" + name + "」 的列。它有的列是：" +
+    this.columns.join("、") + "。", this.sql, at);
+};
+
+Parser.prototype.parseSelect = function () {
+  this.needWord("SELECT", "沙盒目前只会一条语句：SELECT ... FROM ...。");
+  if (this.atWord("DISTINCT")) {
+    var dt = this.peek();
+    throw SqlError("沙盒不支持 DISTINCT（去重要先排序或建临时集合，代价不小）。" +
+      "真数据库里它会让你看到「临时 B 树」这一步，回 01_sql_tour.sql 用 SQLite 试。",
+      this.sql, dt.pos);
+  }
+  var items = this.parseSelectList();
+
+  this.needWord("FROM", "SELECT 后面要接 FROM 指定查哪张表，例如 FROM readers。");
+  var tkTable = this.peek();
+  if (tkTable.type !== "name") {
+    throw SqlError("FROM 后面要跟表名。可用的表只有：" + Object.keys(DB).join(" / ") + "。",
+      this.sql, tkTable.pos);
+  }
+  this.i++;
+  var tname = tkTable.value;
+  var lowerTable = null;
+  for (var key in DB) {
+    if (Object.prototype.hasOwnProperty.call(DB, key) && key.toLowerCase() === tname.toLowerCase()) {
+      lowerTable = key;
+    }
+  }
+  if (!lowerTable) {
+    throw SqlError("找不到表 「" + tname + "」。可用的表只有：" + Object.keys(DB).join(" / ") + "。",
+      this.sql, tkTable.pos);
+  }
+  this.table = lowerTable;
+  this.columns = DB[lowerTable].columns;
+  // 表别名（可选项，本沙盒只用来让 readers.name 这种写法不报错）
+  if (this.eatWord("AS")) { this.i++; }
+  else if (this.peek().type === "name" && !this.isClauseKeyword(this.peek().value)) { this.i++; }
+
+  var where = null;
+  if (this.eatWord("WHERE")) where = this.parseExpr();
+
+  var orderBy = null;
+  if (this.atWord("ORDER")) {
+    this.i++;
+    this.needWord("BY", "ORDER 后面要跟 BY，写成 ORDER BY 列名 [DESC]。");
+    orderBy = [];
+    for (;;) {
+      var c = this.parseColumnName("ORDER BY 后面要跟列名。");
+      var dir = 1;
+      if (this.eatWord("DESC")) dir = -1;
+      else this.eatWord("ASC");
+      orderBy.push({ col: c, dir: dir });
+      if (!this.eatOp(",")) break;
+    }
+  }
+
+  // 明确告诉用户：这些子句本沙盒故意没实现
+  var stopWords = ["GROUP", "HAVING", "JOIN", "UNION", "DISTINCT", "WITH"];
+  var tk = this.peek();
+  if (tk.type === "name") {
+    var up = tk.value.toUpperCase();
+    for (var s = 0; s < stopWords.length; s++) {
+      if (up === stopWords[s]) {
+        throw SqlError("沙盒暂时不支持 " + up + "。它能做的是单表" +
+          "「过滤 + 排序 + 截断」：SELECT / FROM / WHERE / ORDER BY / LIMIT。" +
+          "聚合和 JOIN 请回 01_sql_tour.sql 用真 SQLite 跑。", this.sql, tk.pos);
+      }
+    }
+  }
+
+  var limit = null, offset = 0;
+  if (this.eatWord("LIMIT")) {
+    var lt = this.peek();
+    if (lt.type !== "num") throw SqlError("LIMIT 后面要跟一个整数，例如 LIMIT 5。", this.sql, lt.pos);
+    this.i++;
+    limit = Math.floor(lt.value);
+    if (this.eatWord("OFFSET")) {
+      var ot = this.peek();
+      if (ot.type !== "num") throw SqlError("OFFSET 后面要跟一个整数。", this.sql, ot.pos);
+      this.i++;
+      offset = Math.floor(ot.value);
+    }
+  }
+
+  var tail = this.peek();
+  if (tail.type === "op" && tail.value === ";") this.i++;
+  var rest = this.peek();
+  if (rest.type !== "eof") {
+    throw SqlError("语句末尾多出了看不懂的东西：「" + rest.value + "」。" +
+      "沙盒一次只执行一条语句，去掉分号后面的内容试试。", this.sql, rest.pos);
+  }
+
+  return { items: items, table: lowerTable, where: where, orderBy: orderBy, limit: limit, offset: offset };
+};
+
+Parser.prototype.isClauseKeyword = function (w) {
+  var up = w.toUpperCase();
+  var kws = ["WHERE", "ORDER", "LIMIT", "GROUP", "HAVING", "JOIN", "ON", "FROM", "OFFSET", "UNION"];
+  for (var i = 0; i < kws.length; i++) if (kws[i] === up) return true;
+  return false;
+};
+
+Parser.prototype.parseColumnName = function (advice) {
+  var tk = this.peek();
+  if (tk.type !== "name") {
+    throw SqlError(advice || "这里需要一个列名。", this.sql, tk.pos);
+  }
+  this.i++;
+  return this.resolveColumn(tk.value);
+};
+
+Parser.prototype.parseSelectList = function () {
+  var items = [];
+  for (;;) {
+    var tk = this.peek();
+    if (tk.type === "op" && tk.value === "*") {
+      this.i++;
+      items.push({ star: true });
+    } else {
+      var nameTk = this.peek();
+      if (nameTk.type !== "name") {
+        throw SqlError("SELECT 后面只能写列名或 *，这里看到的是" +
+          (nameTk.type === "eof" ? "语句结尾" : "「" + nameTk.value + "」") +
+          "。沙盒不支持函数和表达式，例如不支持 COUNT(*)、price*2。", this.sql, nameTk.pos);
+      }
+      this.i++;
+      // FROM 还没解析，列名要等到 FROM 之后才能校验，这里先存原名和位置
+      var col = { star: false, raw: nameTk.value, pos: nameTk.pos, name: null, alias: null };
+      if (this.eatWord("AS")) {
+        var a = this.peek();
+        if (a.type !== "name") throw SqlError("AS 后面要跟别名（不要用引号）。", this.sql, a.pos);
+        this.i++;
+        col.alias = a.value;
+      } else if (this.peek().type === "name" && !this.isClauseKeyword(this.peek().value)) {
+        col.alias = this.peek().value;
+        this.i++;
+      }
+      items.push(col);
+    }
+    if (!this.eatOp(",")) break;
+    // 逗号后面必须还有东西
+    if (this.peek().type === "eof") {
+      throw SqlError("逗号后面没有内容了，多写了一个逗号。", this.sql, this.peek().pos);
+    }
+  }
+  return items;
+};
+
+/* ---- 表达式：OR / AND / NOT / 比较 ---- */
+Parser.prototype.parseExpr = function () { return this.parseOr(); };
+
+Parser.prototype.parseOr = function () {
+  var left = this.parseAnd();
+  while (this.eatWord("OR")) {
+    var right = this.parseAnd();
+    left = { kind: "or", left: left, right: right };
+  }
+  return left;
+};
+
+Parser.prototype.parseAnd = function () {
+  var left = this.parseNot();
+  while (this.eatWord("AND")) {
+    var right = this.parseNot();
+    left = { kind: "and", left: left, right: right };
+  }
+  return left;
+};
+
+Parser.prototype.parseNot = function () {
+  if (this.eatWord("NOT")) return { kind: "not", operand: this.parseNot() };
+  return this.parsePredicate();
+};
+
+Parser.prototype.parsePredicate = function () {
+  if (this.eatOp("(")) {
+    var inner = this.parseExpr();
+    if (!this.eatOp(")")) {
+      throw SqlError("左括号 ( 找不到配对的右括号 )。", this.sql, this.peek().pos);
+    }
+    return inner;
+  }
+
+  var lhs = this.parseOperand();
+
+  // IS [NOT] NULL
+  if (this.eatWord("IS")) {
+    var neg = this.eatWord("NOT");
+    if (this.eatWord("NULL")) return { kind: "isnull", neg: neg, operand: lhs };
+    this.eatWord("TRUE"); this.eatWord("FALSE");
+    throw SqlError("IS 后面沙盒只支持 NULL / NOT NULL，例如 return_date IS NULL。", this.sql, this.peek().pos);
+  }
+
+  // 先探一个 NOT：它可能属于 LIKE，也可能属于 IN
+  var negLike = false, negIn = false;
+  if (this.atWord("NOT")) {
+    var save = this.i;
+    this.i++;
+    if (this.eatWord("LIKE")) {
+      negLike = true;
+    } else if (this.atWord("IN")) {
+      this.i++;              // 消耗掉 IN， negIn 交给下面统一处理
+      negIn = true;
+    } else {
+      this.i = save;         // 回退，让外层「NOT 条件」的写法报错更准
+      throw SqlError("NOT 后面应该接一个条件、LIKE 或 IN。", this.sql, this.peek().pos);
+    }
+  }
+
+  // IN / NOT IN
+  if (negIn || this.atWord("IN")) {
+    if (!negIn) this.i++;    // 消耗 IN
+    if (!this.eatOp("(")) throw SqlError("IN 后面要跟括号，例如 city IN ('北京', '上海')。", this.sql, this.peek().pos);
+    var list = [];
+    if (!this.atOp(")")) {
+      for (;;) {
+        list.push(this.parseOperand());
+        if (!this.eatOp(",")) break;
+      }
+    }
+    if (!this.eatOp(")")) throw SqlError("IN 的列表缺少右括号 )。", this.sql, this.peek().pos);
+    return { kind: "in", neg: negIn, operand: lhs, list: list };
+  }
+
+  // LIKE / NOT LIKE
+  if (negLike || this.eatWord("LIKE")) {
+    var pat = this.parseOperand();
+    return { kind: "like", neg: negLike, operand: lhs, pattern: pat };
+  }
+
+  // 二元比较
+  var opTok = this.peek();
+  if (opTok.type === "op") {
+    var op = opTok.value;
+    if (op === "=" || op === "!=" || op === "<>" || op === ">" || op === ">=" || op === "<" || op === "<=") {
+      this.i++;
+      var rhs = this.parseOperand();
+      if (op === "<>") op = "!=";
+      if (/=|!=/.test(op) && rhs.kind === "lit" && rhs.value === null) {
+        throw SqlError("不能用 " + op + " 和 NULL 比！NULL 的意思是「未知」，" +
+          "任何值与它比较结果都是 unknown，这一行永远不会被选中。" +
+          "要判空请写 列 IS NULL 或 列 IS NOT NULL。", this.sql, opTok.pos);
+      }
+      return { kind: "cmp", op: op, left: lhs, right: rhs };
+    }
+  }
+
+  throw SqlError("WHERE 条件写完了，但这里还剩「" +
+    (opTok.type === "eof" ? "（结尾）" : opTok.value) + "」没消化。" +
+    "沙盒支持的条件形式：列 = 值、列 > 值、列 LIKE '%x%'、列 IS NULL、列 IN (值,...)，" +
+    "以及用 AND / OR / 括号 组合。", this.sql, opTok.pos);
+};
+
+Parser.prototype.parseOperand = function () {
+  var tk = this.peek();
+  if (tk.type === "str") { this.i++; return { kind: "lit", value: tk.value }; }
+  if (tk.type === "num") { this.i++; return { kind: "lit", value: tk.value }; }
+  if (tk.type === "name") {
+    if (tk.value.toUpperCase() === "NULL") { this.i++; return { kind: "lit", value: null }; }
+    this.i++;
+    return { kind: "col", name: this.resolveColumn(tk.value) };
+  }
+  throw SqlError("这里需要一个列名或者一个值（数字 / '字符串' / NULL），" +
+    "看到的是" + (tk.type === "eof" ? "语句结尾" : "「" + tk.value + "」") + "。", this.sql, tk.pos);
+};
+
+/* =====================================================================
+   求值：三值逻辑（true / false / null=unknown）
+   ===================================================================== */
+function likeToRegex(pattern) {
+  var re = "^";
+  for (var i = 0; i < pattern.length; i++) {
+    var ch = pattern.charAt(i);
+    if (ch === "%") { re += "[\\s\\S]*"; }
+    else if (ch === "_") { re += "[\\s\\S]"; }
+    else { re += ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+  }
+  return new RegExp(re + "$", "i");   // i：ASCII 字母大小写不敏感，与 SQLite 一致
+}
+
+function cmpValues(a, b) {
+  if (typeof a === "number" && typeof b === "number") return a < b ? -1 : (a > b ? 1 : 0);
+  var sa = String(a), sb = String(b);
+  return sa < sb ? -1 : (sa > sb ? 1 : 0);
+}
+
+function evalOperand(node, row, self) {
+  if (node.kind === "lit") return node.value;
+  var v = row[node.name];
+  return (v === undefined) ? null : v;
+}
+
+function evalExpr(node, row, self) {
+  switch (node.kind) {
+    case "and": {
+      var l = evalExpr(node.left, row, self);
+      if (l === false) return false;
+      var r = evalExpr(node.right, row, self);
+      if (r === false) return false;
+      if (l === null || r === null) return null;
+      return true;
+    }
+    case "or": {
+      var l2 = evalExpr(node.left, row, self);
+      if (l2 === true) return true;
+      var r2 = evalExpr(node.right, row, self);
+      if (r2 === true) return true;
+      if (l2 === null || r2 === null) return null;
+      return false;
+    }
+    case "not": {
+      var v = evalExpr(node.operand, row, self);
+      return v === null ? null : !v;
+    }
+    case "isnull": {
+      var v2 = evalOperand(node.operand, row, self);
+      var isNull = (v2 === null);
+      return node.neg ? !isNull : isNull;
+    }
+    case "like": {
+      var lhs = evalOperand(node.operand, row, self);
+      var pat = evalOperand(node.pattern, row, self);
+      if (lhs === null || pat === null) return null;
+      var hit = likeToRegex(String(pat)).test(String(lhs));
+      return node.neg ? !hit : hit;
+    }
+    case "in": {
+      var v3 = evalOperand(node.operand, row, self);
+      if (v3 === null) return null;
+      var found = false;
+      for (var i = 0; i < node.list.length; i++) {
+        var item = evalOperand(node.list[i], row, self);
+        if (item === null) continue;
+        self.cmpCount++;
+        if (cmpValues(v3, item) === 0) { found = true; break; }
+      }
+      return node.neg ? !found : found;
+    }
+    case "cmp": {
+      var a = evalOperand(node.left, row, self);
+      var b = evalOperand(node.right, row, self);
+      self.cmpCount++;
+      if (a === null || b === null) return null;   // unknown —— 这就是 NULL 的坑
+      var c = cmpValues(a, b);
+      switch (node.op) {
+        case "=":  return c === 0;
+        case "!=": return c !== 0;
+        case ">":  return c > 0;
+        case ">=": return c >= 0;
+        case "<":  return c < 0;
+        case "<=": return c <= 0;
+      }
+      return null;
+    }
+  }
+  return null;
+}
+
+/* =====================================================================
+   执行引擎：全表扫描 → 过滤 → 排序 → 截断
+   ===================================================================== */
+function runQuery(ast) {
+  var table = DB[ast.table];
+  var scanned = table.rows.length;
+
+  // 1. FROM：把整张表一行行读出来（沙盒没有索引，只能这么干）
+  // 2. WHERE：对每一行判断条件（注意三值逻辑：只有 true 才保留）
+  var kept = [];
+  for (var i = 0; i < table.rows.length; i++) {
+    var row = table.rows[i];
+    if (ast.where === null || evalExpr(ast.where, row, { cmpCount: 0 })) kept.push(row);
+  }
+
+  // 3. ORDER BY
+  if (ast.orderBy && ast.orderBy.length) {
+    kept = kept.slice().sort(function (x, y) {
+      for (var k = 0; k < ast.orderBy.length; k++) {
+        var col = ast.orderBy[k].col;
+        var vx = x[col], vy = y[col];
+        if (vx === vy) continue;
+        if (vx === null) return -1 * ast.orderBy[k].dir;   // NULL 排最前，与 SQLite 一致
+        if (vy === null) return 1 * ast.orderBy[k].dir;
+        return cmpValues(vx, vy) * ast.orderBy[k].dir;
+      }
+      return 0;
+    });
+  }
+
+  // 4. LIMIT / OFFSET
+  var limited = kept;
+  if (ast.offset) limited = limited.slice(ast.offset);
+  if (ast.limit !== null) limited = limited.slice(0, ast.limit);
+
+  // 5. 投影：算出输出列
+  var outCols = [];
+  for (var p = 0; p < ast.items.length; p++) {
+    var it = ast.items[p];
+    if (it.star) {
+      for (var q = 0; q < table.columns.length; q++) {
+        outCols.push({ name: table.columns[q], raw: table.columns[q] });
+      }
+    } else {
+      outCols.push({ name: it.alias || it.raw, raw: it.name });
+    }
+  }
+  var outRows = [];
+  for (var r = 0; r < limited.length; r++) {
+    var outRow = [];
+    for (var c = 0; c < outCols.length; c++) {
+      var val = limited[r][outCols[c].raw];
+      outRow.push(val === undefined ? null : val);
+    }
+    outRows.push(outRow);
+  }
+
+  return { columns: outCols, rows: outRows, scanned: scanned, kept: kept.length };
+}
+
+/* =====================================================================
+   执行入口 + 界面渲染
+   ===================================================================== */
+var $ = function (id) { return document.getElementById(id); };
+var totalRows = 0;
+for (var t in DB) if (Object.prototype.hasOwnProperty.call(DB, t)) totalRows += DB[t].rows.length;
+$("statTotal").textContent = String(totalRows);
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, function (ch) {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch];
+  });
+}
+
+function showSqlError(err) {
+  var box = $("explain");
+  box.hidden = false;
+  box.className = "error";
+  var msg = "<code>" + escapeHtml(err.message) + "</code>";
+  if (typeof err.sqlPos === "number" && err.sqlPos >= 0) {
+    var sqlText = $("sql").value;
+    var head = sqlText.slice(0, err.sqlPos).replace(/\s+$/, "");
+    var tailPart = sqlText.slice(err.sqlPos);
+    msg = '<div class="errpos">' + escapeHtml(head) +
+          '<span class="caret">↑ 就在这儿</span>' + escapeHtml(tailPart) + '</div>' + msg;
+  }
+  $("explainText").innerHTML = msg;
+  $("resultBox").innerHTML = '<div class="empty">没有结果——SQL 没通过语法检查。</div>';
+  $("statScan").textContent = "-";
+  $("statHit").textContent = "-";
+  $("statCmp").textContent = "-";
+}
+
+function buildExplanation(ast, res) {
+  var bits = [];
+  var tbl = ast.table;
+  var hasLike = /LIKE/i.test($("sql").value);
+  var leadingWild = /LIKE\s+'%/.test($("sql").value);
+
+  bits.push("从 <code>" + tbl + "</code> 读数据。这张表有 <b>" + res.scanned +
+            "</b> 行，沙盒里没有索引可用，所以 <b>" + res.scanned + "</b> 行全都要被读一遍——这就是「全表扫描」。");
+
+  if (ast.where) {
+    bits.push("WHERE 又对这 <b>" + res.scanned + "</b> 行逐行判断条件，最后命中 <b>" +
+              res.kept + "</b> 行。");
+    if (res.kept === 0) {
+      bits.push("一条都没命中。别急着怀疑语法，先确认值写得对不对（大小写、空格、引号），" +
+                "再用 <code>" + escapeHtml(tbl) + "</code> 单独查一下那一列到底长什么样。");
+    }
+  } else {
+    bits.push("没写 WHERE，等于「全部都要」——表越大越吃亏。");
+  }
+
+  if (hasLike) {
+    bits.push(leadingWild
+      ? "用了 <code>LIKE '%...'</code> 这种前面带通配的匹配：索引里的值是<b>有序</b>的，" +
+        "但你不知道它以什么开头，树就白搭了，只能一行行试。前缀匹配 <code>LIKE 'abc%'</code> 才是能用索引的写法。"
+      : "用了 LIKE 匹配。前缀式的 LIKE 在真实数据库里可以走索引，中缀/后缀的就不行。");
+  }
+
+  if (ast.orderBy) {
+    bits.push("命中的 <b>" + res.kept + "</b> 行还要整体装进内存排序（临时 B 树），" +
+              "排序代价随命中行数增长——先过滤再排序，所以 WHERE 越狠，排序越便宜。");
+  }
+
+  if (ast.limit !== null) {
+    bits.push("<code>LIMIT " + ast.limit + "</code> 只影响<b>输出</b>几行，" +
+              "它发生在排序之后：该扫的行、该排的行，一行都没少省。真想少扫描，得靠 WHERE + 索引。");
+  }
+
+  bits.push("一句话：<b>全表扫描 " + res.scanned + " 行 → 命中 " + res.kept + " 行 → 输出 " +
+            res.rows.length + " 行</b>。扫描行数不随 LIMIT 变小，这就是没有索引的代价。");
+  return bits.join(" ");
+}
+
+function renderResult(res) {
+  if (res.columns.length === 0) {
+    $("resultBox").innerHTML = '<div class="empty">没有可显示的列。</div>';
+    return;
+  }
+  var html = "<table><thead><tr>";
+  for (var i = 0; i < res.columns.length; i++) {
+    html += "<th>" + escapeHtml(res.columns[i].name) + "</th>";
+  }
+  html += "</tr></thead><tbody>";
+  if (res.rows.length === 0) {
+    html += '<tr><td colspan="' + res.columns.length +
+            '" style="color:#94a3b8;padding:16px;">查询成功，但一行都没命中（0 行）。</td></tr>';
+  }
+  for (var r = 0; r < res.rows.length; r++) {
+    html += "<tr>";
+    for (var c = 0; c < res.rows[r].length; c++) {
+      var v = res.rows[r][c];
+      if (v === null) html += '<td class="nullv">NULL</td>';
+      else if (typeof v === "number") html += '<td class="num">' + v + "</td>";
+      else html += '<td class="txt">' + escapeHtml(v) + "</td>";
+    }
+    html += "</tr>";
+  }
+  html += "</tbody></table>";
+  $("resultBox").innerHTML = html;
+}
+
+function execute() {
+  var sqlText = $("sql").value;
+  if (!sqlText.trim()) {
+    $("explain").hidden = true;
+    $("resultBox").innerHTML = '<div class="empty">先写点什么再运行。</div>';
+    return;
+  }
+  var ast;
+  try {
+    var toks = tokenize(sqlText);
+    var parser = new Parser(toks, sqlText);
+    ast = parser.parseSelect();
+    // FROM 解析完了，现在补校验 SELECT 列表里的列名
+    for (var i = 0; i < ast.items.length; i++) {
+      if (!ast.items[i].star) ast.items[i].name = parser.resolveColumn(ast.items[i].raw, ast.items[i].pos);
+    }
+  } catch (err) {
+    if (err && err.isSqlError) { showSqlError(err); return; }
+    throw err;
+  }
+
+  // 条件判断次数：单独跑一遍统计，让你看清"逻辑上做了多少次比较"
+  var table = DB[ast.table];
+  var counter = { cmpCount: 0 };
+  if (ast.where) {
+    for (var k = 0; k < table.rows.length; k++) evalExpr(ast.where, table.rows[k], counter);
+  } else {
+    counter.cmpCount = 0;
+  }
+
+  var res = runQuery(ast);
+  $("statScan").textContent = String(res.scanned);
+  $("statHit").textContent = String(res.kept);
+  $("statCmp").textContent = String(counter.cmpCount);
+  renderResult(res);
+
+  var box = $("explain");
+  box.hidden = false;
+  box.className = "";
+  $("explainText").innerHTML = buildExplanation(ast, res);
+}
+
+$("runBtn").addEventListener("click", execute);
+$("sql").addEventListener("keydown", function (ev) {
+  if ((ev.ctrlKey || ev.metaKey) && ev.key === "Enter") { ev.preventDefault(); execute(); }
+});
+var exBtns = document.querySelectorAll("button.ex");
+for (var b = 0; b < exBtns.length; b++) {
+  exBtns[b].addEventListener("click", function (ev) {
+    $("sql").value = ev.currentTarget.getAttribute("data-q");
+    execute();
+  });
+}
+
+// 打开页面就跑一次，让「扫描行数」立刻可见
+execute();
+</script>
+</body>
+</html>

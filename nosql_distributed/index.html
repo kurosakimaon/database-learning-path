@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第 6 关 · 轻剑期：NoSQL 与分布式的门 — 数据库学习路线</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface-2: #334155;
+    --ink: #f1f5f9;
+    --ink-muted: #94a3b8;
+    --ink-dim: #64748b;
+    --rule: #334155;
+    --accent: #38bdf8;
+    --accent-2: #818cf8;
+    --ok: #4ade80;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --mono: "Consolas", "Cascadia Mono", "Courier New", ui-monospace, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                 "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.7;
+    font-size: 14px;
+    padding: 34px 20px 70px;
+  }
+  .container { max-width: 1120px; margin: 0 auto; }
+
+  .header { text-align: center; margin-bottom: 30px; }
+  .header .stage {
+    display: inline-block;
+    font-size: 12px;
+    letter-spacing: .12em;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    padding: 3px 14px;
+    margin-bottom: 14px;
+  }
+  .header h1 {
+    font-size: 2rem;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 10px;
+  }
+  .header p { color: var(--ink-muted); font-size: 14px; max-width: 760px; margin: 0 auto; }
+  .header code { font-family: var(--mono); color: var(--accent); }
+
+  .thesis {
+    max-width: 760px; margin: 18px auto 0;
+    background: rgba(56,189,248,.07);
+    border: 1px solid var(--accent);
+    border-radius: 12px;
+    padding: 14px 20px;
+    font-size: 14.5px;
+    color: var(--ink);
+  }
+  .thesis b { color: var(--accent); }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 14px;
+    padding: 22px 26px;
+    margin-bottom: 22px;
+  }
+  .panel h2 {
+    font-size: 16px;
+    color: var(--accent);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .panel p { color: var(--ink-muted); font-size: 13.5px; }
+  .panel code { font-family: var(--mono); color: var(--accent); }
+  .panel b { color: var(--ink); }
+
+  .why { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 12px; }
+  .why > div {
+    background: rgba(56,189,248,.06);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--accent-2);
+    border-radius: 9px;
+    padding: 12px 14px;
+    font-size: 13px;
+    color: var(--ink-muted);
+  }
+  .why b { color: var(--ink); display: block; margin-bottom: 4px; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin: 18px 0 8px; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 14px;
+    padding: 20px;
+    text-decoration: none;
+    color: inherit;
+    display: block;
+    position: relative;
+    overflow: hidden;
+    transition: transform .18s, border-color .18s, box-shadow .18s;
+  }
+  .card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  }
+  .card:hover {
+    transform: translateY(-4px);
+    border-color: var(--accent);
+    box-shadow: 0 12px 32px rgba(2, 6, 23, .6);
+  }
+  .card .no {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-dim);
+    margin-bottom: 6px;
+  }
+  .card .title { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+  .card .title code { font-family: var(--mono); color: var(--accent); font-size: 15px; }
+  .card .desc { font-size: 12.5px; color: var(--ink-muted); line-height: 1.65; min-height: 60px; }
+  .card .tags { margin-top: 12px; display: flex; gap: 7px; flex-wrap: wrap; }
+  .tag {
+    font-size: 10.5px;
+    padding: 2px 9px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    color: var(--ink-muted);
+  }
+  .tag.star { background: rgba(56,189,248,.16); color: var(--accent); }
+  .tag.tool { background: rgba(129,140,248,.16); color: var(--accent-2); }
+  .tag.live { background: rgba(74,222,128,.14); color: var(--ok); }
+
+  .order { counter-reset: st; margin-top: 10px; }
+  .order li {
+    list-style: none;
+    counter-increment: st;
+    padding: 10px 0 10px 46px;
+    position: relative;
+    border-bottom: 1px dashed var(--rule);
+    color: var(--ink-muted);
+    font-size: 13.5px;
+  }
+  .order li:last-child { border-bottom: none; }
+  .order li::before {
+    content: counter(st);
+    position: absolute; left: 6px; top: 10px;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #0b1220;
+    font-weight: 700;
+    font-size: 13px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .order code { font-family: var(--mono); color: var(--accent); }
+  .order b { color: var(--ink); }
+
+  pre.cmd {
+    background: #0b1220;
+    border: 1px solid var(--rule);
+    border-radius: 9px;
+    padding: 13px 16px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.85;
+    overflow-x: auto;
+    margin-top: 10px;
+  }
+  pre.cmd .c { color: var(--ink-dim); }
+  pre.cmd .k { color: var(--accent); }
+  pre.cmd .w { color: var(--warn); }
+  .note {
+    margin-top: 12px; padding: 10px 14px;
+    border-left: 3px solid var(--warn);
+    background: rgba(251,191,36,.07);
+    border-radius: 0 8px 8px 0;
+    font-size: 12.5px;
+    color: var(--ink-muted);
+  }
+  .note b { color: var(--warn); }
+
+  .ledger { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 12px; }
+  .ledger > div {
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-size: 13px;
+    color: var(--ink-muted);
+    background: rgba(15,23,42,.5);
+  }
+  .ledger b { display: block; margin-bottom: 6px; font-size: 14px; }
+  .ledger .wr b { color: var(--accent-2); }
+  .ledger .rd b { color: var(--accent); }
+  .ledger .big { font-family: var(--mono); font-size: 18px; color: var(--ink); }
+  @media (max-width: 720px) { .ledger { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="stage">数据库学习路线 · 第 6 关</div>
+    <h1>轻剑期 · NoSQL 与分布式的门</h1>
+    <p>
+      给会 C++ 的你：LSM-Tree 就是一个<em>有序 <code>std::map</code> 攒满了
+      顺序写进文件、文件攒满了再做 k 路归并</em>；异步复制就是两个线程
+      之间隔了一条<em>会延迟的队列</em>。把这两件事在账本上算清楚，
+      NoSQL 和分布式这两扇门你就看穿了大半。
+    </p>
+    <div class="thesis">
+      ◆ 本关唯一要刻进脑子的一句话：<b>没有免费的存储，只有换科目记账的存储。</b>
+      LSM 把随机写换成顺序写，用写放大和 compaction 付账；分布式把单机锁
+      换成多副本协议，用一致性延迟付账。本关的目标不是精通 NoSQL，
+      是<b>知道边界在哪</b>。
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>🧭 先认两本新账，再看所有引擎</h2>
+    <p>
+      前五关你记过"比较次数"和"页读取次数"两本账。这一关加两本新的，
+      <b>口径与 <code>02_lsm_vs_btree.cpp</code> 完全一致</b>，动画里的指标
+      面板也按同一口径算：
+    </p>
+    <div class="ledger">
+      <div class="wr">
+        <b>写的账：写放大</b>
+        写放大 = 累计落盘字节 <span class="big">÷</span> 用户字节。<br>
+        flush 落一遍、compaction 再重写几遍，旧段报废也算账。
+        LSM 典型 <span class="big">2~4 倍</span>——买顺序写百倍吞吐的价签。
+      </div>
+      <div class="rd">
+        <b>读的账：读放大</b>
+        一次查询要探测几个段、布隆放行几个、真读几个数据页。<br>
+        memtable → L0 逐段(新在前) → L1..Lk，段数就是探测上限；
+        布隆说"肯定没有"就<span class="big">一次盘都不碰</span>。
+      </div>
+    </div>
+    <div class="why">
+      <div><b>模型的脾气</b>KV 管"按 key 直取"，文档管"整体读写+按字段筛"，列族管"一行几百万列只读几列"，图管"沿邻居走 O(邻居数)"。选模型=选访问形状。</div>
+      <div><b>compaction 不免费</b>L0 攒满 4 段（l0Fanout=4）触发与 L1 的 k 路归并，同键新值赢、老段全报废；压太狠抢前台带宽，就是 write stall。</div>
+      <div><b>一致性要付账</b>atomic 读改写照样丢更新；线性化要全局锁；异步复制省了锁，就可能读不到自己刚写的——CAP 不是哲学题，是账单。</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>📁 文件卡片（6 个，全部离线可用）</h2>
+    <div class="cards">
+      <a class="card" href="tutorial.md">
+        <div class="no">MAP · 先读这个</div>
+        <div class="title"><code>tutorial.md</code></div>
+        <div class="desc">老师傅的带教手册：为什么本关只要求"知道边界在哪"、两本新账的口径、7 个必踩的坑（NoSQL 不是银弹、别过早分片、布隆与读放大必须成对理解……）、6 道课后练习。开工前通读一遍。</div>
+        <div class="tags"><span class="tag">地图</span><span class="tag">纯文本</span></div>
+      </a>
+      <a class="card" href="01_data_models.cpp">
+        <div class="no">STEP 01 · 四种模型的脾气</div>
+        <div class="title"><code>01_data_models.cpp</code></div>
+        <div class="desc">四五十行一个最小实现：KV（仿 Redis）、文档（仿 MongoDB，嵌套 BSON 整条读写）、列族（仿 Cassandra，稀疏列只碰要读的列）、图（仿 Neo4j，遍历邻居 O(邻居数)）。每个模型末尾的"老师傅的话"比代码值钱。</div>
+        <div class="tags"><span class="tag star">★ C++ 单文件</span><span class="tag live">g++ 直接编译</span></div>
+      </a>
+      <a class="card" href="02_lsm_vs_btree.cpp">
+        <div class="no">STEP 02 · 本关账本</div>
+        <div class="title"><code>02_lsm_vs_btree.cpp</code></div>
+        <div class="desc">手写 LSM-Tree（memtable→flush→L0 攒 4 段归并进 L1→层层下压，布隆 10bit/元素）与简化 B+ 树（每次插入在页里挖洞、随机 IO）正面对决。实测 LSM 写放大 2~4x、compaction 后段探测从 ~4 降到 ~1.8。四条结论逐字读三遍。</div>
+        <div class="tags"><span class="tag star">★ 本关心脏</span><span class="tag live">g++ 直接编译</span></div>
+      </a>
+      <a class="card" href="lsm_animator.html">
+        <div class="no">TOOL · 本关重头戏</div>
+        <div class="title"><code>lsm_animator.html</code></div>
+        <div class="desc">LSM-Tree 全流程交互动画：写 key → memtable 冻结 → flush 成 L0 有序段 → L0 满 4 段 compaction 进 L1 → L1 超限压进 L2。查询路径一段段高亮走位，读放大肉眼可见；右侧写放大/探测数/布隆放行/真读页数全部由动画状态真算，与 02 同口径。</div>
+        <div class="tags"><span class="tag tool">交互动画</span><span class="tag">双击即开</span></div>
+      </a>
+      <a class="card" href="03_concurrency_cpp.cpp">
+        <div class="no">STEP 03 · 真线程踩坑</div>
+        <div class="title"><code>03_concurrency_cpp.cpp</code></div>
+        <div class="desc">std::thread 真并发四连：atomic 读改写丢更新（LaggyBank）、互斥+线性化流水账的价签（StrongBank）、异步复制违背 read-your-writes（EventualCluster）、版本号拦旧值（CausalReplica）。坑不是讲出来的，是你机器上真丢的那几块钱。</div>
+        <div class="tags"><span class="tag star">★ 实测复现</span><span class="tag live">g++ -pthread</span></div>
+      </a>
+      <a class="card" href="cap_visualizer.html">
+        <div class="no">TOOL · CAP 推演台</div>
+        <div class="title"><code>cap_visualizer.html</code></div>
+        <div class="desc">手动制造网络分区：同一份数据在分区两侧各写各的，恢复后看三档一致性（线性化 / 因果 / 最终一致）各怎么收场——线性化分区期间直接拒写，最终一致悄悄分叉再合并。与 03 互为表里：03 真线程踩坑，这个把坑画给你看。</div>
+        <div class="tags"><span class="tag tool">交互动画</span><span class="tag">双击即开</span></div>
+      </a>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>🪜 建议的学习顺序</h2>
+    <ol class="order">
+      <li><b>通读 <code>tutorial.md</code></b>——先接受"知道边界在哪，不是精通"这条纪律，带着"每一步谁在付账"的问题往下看。</li>
+      <li><b>跑 <code>01_data_models.cpp</code></b>——KV / 文档 / 列族 / 图各写十行，把四种模型的"访问形状"和"放弃了什么"各自说一句话。</li>
+      <li><b>精读 <code>02_lsm_vs_btree.cpp</code> 并跑起来</b>——盯 put 的零 IO 路径、get 的探测链、compaction 的 k 路归并（同键新值赢），最后四条结论逐字读。</li>
+      <li><b>玩 <code>lsm_animator.html</code></b>——每按一次按钮前先猜右侧哪个数字会动、动多少；猜十次全对，LSM 结构才算你的。重点体验：查不存在的键时布隆帮你砍掉几段。</li>
+      <li><b>跑 <code>03_concurrency_cpp.cpp</code></b>——先猜 LaggyBank 丢不丢钱，再看 EventualCluster 怎么读到旧值；版本号那段的 60/10/30ms 延迟乱序要亲眼看一遍。</li>
+      <li><b>玩 <code>cap_visualizer.html</code></b>——亲手分区、两侧写、恢复，看三档一致性的收场差异；然后做 tutorial.md 末尾 6 道练习，做完才算通关。</li>
+    </ol>
+  </div>
+
+  <div class="panel">
+    <h2>⌨️ 编译命令速查（PowerShell · g++ 15.2 已验证）</h2>
+    <pre class="cmd">
+<span class="c"># 三个 C++ 示例：单文件，直接编译运行</span>
+<span class="k">g++</span> -std=c++17 -O2 01_data_models.cpp -o 01_data_models.exe ; .\01_data_models.exe
+<span class="k">g++</span> -std=c++17 -O2 02_lsm_vs_btree.cpp -o 02_lsm_vs_btree.exe ; .\02_lsm_vs_btree.exe
+<span class="k">g++</span> -std=c++17 -O2 03_concurrency_cpp.cpp -o 03_concurrency_cpp.exe ; .\03_concurrency_cpp.exe
+
+<span class="c"># 03 用到 std::thread，若链接报 undefined reference，补线程库再编：</span>
+<span class="k">g++</span> -std=c++17 -O2 -pthread 03_concurrency_cpp.cpp -o 03_concurrency_cpp.exe
+
+<span class="c"># 两个动画：文件管理器里双击 .html 即可，零外部依赖、断网可用</span>
+<span class="w"># 跑完记得清理：三个 .exe，以及 02 演示完自动删除的临时数据目录 lsm_tmp_data\</span></pre>
+    <div class="note">
+      <b>提示：</b>02 会在当前目录临时建 <code>lsm_tmp_data\</code> 写真的 SST 文件
+      （演示完自动 <code>remove_all</code> 清场）；若中途 Ctrl+C 留下残留，手动删掉即可。
+      03 的演示带真实 sleep 延迟，跑满约十几秒，别急着关窗口。
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

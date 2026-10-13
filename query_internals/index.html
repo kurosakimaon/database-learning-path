@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第 5 关 · 结丹期：查询内幕 — 数据库学习路线</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface-2: #334155;
+    --ink: #f1f5f9;
+    --ink-muted: #94a3b8;
+    --ink-dim: #64748b;
+    --rule: #334155;
+    --accent: #38bdf8;
+    --accent-2: #818cf8;
+    --ok: #4ade80;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --mono: "Consolas", "Cascadia Mono", "Courier New", ui-monospace, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                 "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.7;
+    font-size: 14px;
+    padding: 34px 20px 70px;
+  }
+  .container { max-width: 1120px; margin: 0 auto; }
+
+  .header { text-align: center; margin-bottom: 30px; }
+  .header .stage {
+    display: inline-block;
+    font-size: 12px;
+    letter-spacing: .12em;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    padding: 3px 14px;
+    margin-bottom: 14px;
+  }
+  .header h1 {
+    font-size: 2rem;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 10px;
+  }
+  .header p { color: var(--ink-muted); font-size: 14px; max-width: 760px; margin: 0 auto; }
+  .header code { font-family: var(--mono); color: var(--accent); }
+
+  .thesis {
+    max-width: 760px; margin: 18px auto 0;
+    background: rgba(56,189,248,.07);
+    border: 1px solid var(--accent);
+    border-radius: 12px;
+    padding: 14px 20px;
+    font-size: 14.5px;
+    color: var(--ink);
+  }
+  .thesis b { color: var(--accent); }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 14px;
+    padding: 22px 26px;
+    margin-bottom: 22px;
+  }
+  .panel h2 {
+    font-size: 16px;
+    color: var(--accent);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .panel p { color: var(--ink-muted); font-size: 13.5px; }
+  .panel code { font-family: var(--mono); color: var(--accent); }
+  .panel b { color: var(--ink); }
+
+  .why { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 12px; }
+  .why > div {
+    background: rgba(56,189,248,.06);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--accent-2);
+    border-radius: 9px;
+    padding: 12px 14px;
+    font-size: 13px;
+    color: var(--ink-muted);
+  }
+  .why b { color: var(--ink); display: block; margin-bottom: 4px; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin: 18px 0 8px; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 14px;
+    padding: 20px;
+    text-decoration: none;
+    color: inherit;
+    display: block;
+    position: relative;
+    overflow: hidden;
+    transition: transform .18s, border-color .18s, box-shadow .18s;
+  }
+  .card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  }
+  .card:hover {
+    transform: translateY(-4px);
+    border-color: var(--accent);
+    box-shadow: 0 12px 32px rgba(2, 6, 23, .6);
+  }
+  .card .no {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-dim);
+    margin-bottom: 6px;
+  }
+  .card .title { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+  .card .title code { font-family: var(--mono); color: var(--accent); font-size: 15px; }
+  .card .desc { font-size: 12.5px; color: var(--ink-muted); line-height: 1.65; min-height: 60px; }
+  .card .tags { margin-top: 12px; display: flex; gap: 7px; flex-wrap: wrap; }
+  .tag {
+    font-size: 10.5px;
+    padding: 2px 9px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    color: var(--ink-muted);
+  }
+  .tag.star { background: rgba(56,189,248,.16); color: var(--accent); }
+  .tag.tool { background: rgba(129,140,248,.16); color: var(--accent-2); }
+  .tag.live { background: rgba(74,222,128,.14); color: var(--ok); }
+
+  .order { counter-reset: st; margin-top: 10px; }
+  .order li {
+    list-style: none;
+    counter-increment: st;
+    padding: 10px 0 10px 46px;
+    position: relative;
+    border-bottom: 1px dashed var(--rule);
+    color: var(--ink-muted);
+    font-size: 13.5px;
+  }
+  .order li:last-child { border-bottom: none; }
+  .order li::before {
+    content: counter(st);
+    position: absolute; left: 6px; top: 10px;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #0b1220;
+    font-weight: 700;
+    font-size: 13px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .order code { font-family: var(--mono); color: var(--accent); }
+  .order b { color: var(--ink); }
+
+  pre.cmd {
+    background: #0b1220;
+    border: 1px solid var(--rule);
+    border-radius: 9px;
+    padding: 13px 16px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.85;
+    overflow-x: auto;
+    margin-top: 10px;
+  }
+  pre.cmd .c { color: var(--ink-dim); }
+  pre.cmd .k { color: var(--accent); }
+  pre.cmd .w { color: var(--warn); }
+  .note {
+    margin-top: 12px; padding: 10px 14px;
+    border-left: 3px solid var(--warn);
+    background: rgba(251,191,36,.07);
+    border-radius: 0 8px 8px 0;
+    font-size: 12.5px;
+    color: var(--ink-muted);
+  }
+  .note b { color: var(--warn); }
+
+  .ledger { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 12px; }
+  .ledger > div {
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-size: 13px;
+    color: var(--ink-muted);
+    background: rgba(15,23,42,.5);
+  }
+  .ledger b { display: block; margin-bottom: 6px; font-size: 14px; }
+  .ledger .est b { color: var(--bad); }
+  .ledger .real b { color: var(--ok); }
+  .ledger .big { font-family: var(--mono); font-size: 18px; color: var(--ink); }
+  @media (max-width: 720px) { .ledger { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="stage">数据库学习路线 · 第 5 关</div>
+    <h1>结丹期 · 查询内幕</h1>
+    <p>
+      给会 C++ 的你：join 算法就是你写过的哈希表与双指针归并，
+      代价模型就是成本函数选最短路，EXPLAIN 是编译器的 <code>-S</code> 输出，
+      火山模型算子就是 <code>next()</code> 迭代器，WAL 就是提交前 journal——
+      数据库的"大脑"没有魔法，全是工程。
+    </p>
+    <div class="thesis">
+      ◆ 本关唯一要刻进脑子的一句话：<b>查询优化器是个会计，不是预言家。</b>
+      它只认估算行数和代价公式，统计一过期，它就能"正确地"选出慢一千倍的计划。
+      看懂了账本，你才看得懂 EXPLAIN。
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>⚖️ 一场真实的翻车：估计 157，现实 15 万</h2>
+    <p>
+      同一条 <code>SELECT u.name FROM users u JOIN orders o ON u.id=o.uid WHERE o.amount&gt;100</code>，
+      四个候选计划。02_cost_model.cpp 把两种"料"分开喂给同一套算账逻辑：
+    </p>
+    <div class="ledger">
+      <div class="est">
+        <b>统计过期时（以为只命中 0.1%）</b>
+        优化器"正确地"选了计划 C（索引扫+回表）：<br>
+        估代价 <span class="big">157.0</span> 全场最低。<br>
+        可真实要回表 49,500 次——真跑起来比 A 慢
+        <span class="big">973</span> 倍。
+      </div>
+      <div class="real">
+        <b>ANALYZE 之后（知道命中 99%）</b>
+        同一个会计换了料，立刻改选计划 A（全表扫+Hash）：<br>
+        页 550 + 比较 104,500 → 代价 <span class="big">1,072.5</span>，<br>
+        与上帝视角一致。C 的真实账单是 152,710。
+      </div>
+    </div>
+    <div class="why">
+      <div><b>算法的账先算清</b>01 实测：块嵌 NL 177.91ms，Hash Join 0.94ms——同数据同结果（48,987 行），差 189 倍。差距全在页账上。</div>
+      <div><b>EXPLAIN 是计划的 X 光</b>SCAN 还是 SEARCH、回不回表、要不要临时 B 树——03 用 15 道题、22 条真实输出练成本能。</div>
+      <div><b>断电的账最后算</b>04 手写 WAL：提交 = fsync 返回；有 COMMIT 重放、没 COMMIT 丢弃、烂尾截断。恢复三规，一次崩溃全演完。</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>📁 文件卡片（7 个，全部离线可用）</h2>
+    <div class="cards">
+      <a class="card" href="tutorial.md">
+        <div class="no">MAP · 先读这个</div>
+        <div class="title"><code>tutorial.md</code></div>
+        <div class="desc">老师傅的带教手册：核心命题（会计不是预言家）、三道坎（两本账 / 估计 vs 现实 / 拉语义）、8 个必踩的坑（含结构体 padding 坑死 WAL 校验）、3 道课后练习。开工前通读一遍。</div>
+        <div class="tags"><span class="tag">地图</span><span class="tag">纯文本</span></div>
+      </a>
+      <a class="card" href="01_join_algorithms.cpp">
+        <div class="no">STEP 01 · 地基</div>
+        <div class="title"><code>01_join_algorithms.cpp</code></div>
+        <div class="desc">四种 join 同场竞技：块嵌 NL / Index NL / Sort-Merge / Hash Join，同一份数据（5000×50000，含 2% 悬空外键），比较与页读分栏记账。实测：约 141~178 / 2.8 / 2.4 / 0.7~0.9 毫秒（耗时随负载浮动）——差近 200 倍的真相是页账不是比较账。</div>
+        <div class="tags"><span class="tag star">★ C++ 单文件</span><span class="tag live">g++ 直接编译</span></div>
+      </a>
+      <a class="card" href="02_cost_model.cpp">
+        <div class="no">STEP 02 · 心脏</div>
+        <div class="title"><code>02_cost_model.cpp</code></div>
+        <div class="desc">手写迷你优化器的"会计部分"：代价 = 页×1.0 + 比较×0.005。三轮剧本：过期统计选 C（估 157，真实慢 973 倍）→ 上帝视角看真实账 → ANALYZE 后会计改选 A。这屏数字治百种"计划怎么这么怪"。</div>
+        <div class="tags"><span class="tag star">★ 本关心脏</span><span class="tag live">g++ 直接编译</span></div>
+      </a>
+      <a class="card" href="03_explain_drills.sql">
+        <div class="no">STEP 03 · 实练</div>
+        <div class="title"><code>03_explain_drills.sql</code></div>
+        <div class="desc">真 SQLite（orders 100 万行）上的 15 道 EXPLAIN 题：先"你猜"，再看写死的真实输出与解读。覆盖索引、最左前缀下半句、filesort、驱动表互拍、IN vs EXISTS、深分页改写（实测快 84 倍）。每行输出都实跑核对过。</div>
+        <div class="tags"><span class="tag star">★ 实测验证</span><span class="tag live">sqlite3 可直接跑</span></div>
+      </a>
+      <a class="card" href="explain_pipeline.html">
+        <div class="no">TOOL · 最重要的教具</div>
+        <div class="title"><code>explain_pipeline.html</code></div>
+        <div class="desc">一条 SQL 的五道工序动画：字符串 → 语法树 → 约束列表 → 优化器打分（A 1,072.5 vs C 152,710）→ 火山模型 next() 箭头流动（BUILD/PROBE/EOF + 实时计数器）→ 结果。14 步，右侧面板同步显示每道工序的输入输出。</div>
+        <div class="tags"><span class="tag tool">交互动画</span><span class="tag">双击即开</span></div>
+      </a>
+      <a class="card" href="04_wal_and_crash.cpp">
+        <div class="no">STEP 04 · 收尾</div>
+        <div class="title"><code>04_wal_and_crash.cpp</code></div>
+        <div class="desc">手写迷你 WAL 引擎：LSN + 校验和、提交 = fsync 返回、随机崩溃注入。五场景实测：REDO 已提交、丢弃未提交、torn write 截尾、NVMe 随机≈顺序（1.0 倍）+ 每笔 fsync 才是大头的真相。附赠结构体 padding 坑一课。</div>
+        <div class="tags"><span class="tag star">★ C++ 单文件</span><span class="tag live">g++ 直接编译</span></div>
+      </a>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>🪜 建议的学习顺序</h2>
+    <ol class="order">
+      <li><b>通读 <code>tutorial.md</code></b>——先接受"会计不是预言家"这句命题，带着"计划到底是怎么被算出来的"往下看。</li>
+      <li><b>跑 <code>01_join_algorithms.cpp</code></b>——四种算法各跑一遍，盯"比较 / 页读"两栏：Hash 赢在哪、Index NL 什么时候翻身（选择性极高时）。</li>
+      <li><b>打开 <code>explain_pipeline.html</code> 点自动播放</b>——先看一遍全流程混个眼熟，特别是火山模型里"黄色箭头向下=next() 调用、绿色箭头向上=行数据"这对关系。</li>
+      <li><b>跑 <code>02_cost_model.cpp</code></b>——三轮剧本一跑，"估 157 / 真 15 万 / 差 973 倍"这三个数字就刻脑子里了，动画里的代价表瞬间看懂。</li>
+      <li><b>做 <code>03_explain_drills.sql</code> 15 道题</b>——每条先遮住注释自己猜，再对答案；把"SCAN 还是 SEARCH、回不回表"练成本能。</li>
+      <li><b>跑 <code>04_wal_and_crash.cpp</code> 并故意改坏它</b>——做 tutorial 练习3：把 torn_bytes 改小 1 字节，看恢复三规多严格。</li>
+      <li><b>做 tutorial.md 末尾的三道练习</b>——解选择率临界点、改 IN 为 EXISTS 看计划、玩崩溃截断。做完这关才算通关。</li>
+    </ol>
+  </div>
+
+  <div class="panel">
+    <h2>⌨️ 跑起来的命令（PowerShell）</h2>
+    <pre class="cmd">
+<span class="c"># C++ 示例：单文件，无需任何依赖（g++ 15 已验证）</span>
+<span class="k">g++</span> -std=c++17 -O2 01_join_algorithms.cpp -o 01.exe ; .\01.exe
+<span class="k">g++</span> -std=c++17 -O2 02_cost_model.cpp -o 02.exe ; .\02.exe
+<span class="k">g++</span> -std=c++17 -O2 04_wal_and_crash.cpp -o 04.exe ; .\04.exe
+
+<span class="c"># SQL 实验：内存库直接跑，退出码 0 = 零报错（sqlite3 3.51 已验证）</span>
+<span class="k">sqlite3</span> :memory: ".read 03_explain_drills.sql"
+
+<span class="c"># 动画：文件管理器里双击 .html 即可，零外部依赖、断网可用</span>
+<span class="w"># 跑完记得清理：01.exe / 02.exe / 04.exe（04 自动删 engine.db 和 engine.wal）</span></pre>
+    <div class="note">
+      <b>提示：</b>03 要现场造 100 万行 orders 并跑 ANALYZE，冷跑约十几秒，别急。
+      04 会在当前目录生成 <code>engine.db</code> / <code>engine.wal</code>，演示完自动删除；
+      若中途强杀进程留下残留，手动删掉即可。编译出的 .exe 也记得清。
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

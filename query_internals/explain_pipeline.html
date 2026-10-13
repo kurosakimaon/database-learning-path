@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>一条 SQL 的旅程 — 从字符串到结果的五道工序</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --panel: #111c33;
+    --panel2: #0b1426;
+    --border: #263449;
+    --acc: #38bdf8;
+    --acc2: #818cf8;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --good: #34d399;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --mono: Consolas, "Courier New", monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 15px/1.7 "Microsoft YaHei", "PingFang SC", sans-serif;
+    padding: 24px 28px 60px;
+  }
+  h1 { font-size: 24px; margin-bottom: 4px; }
+  h1 .hl { color: var(--acc); }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+  .sub code { font-family: var(--mono); color: var(--warn); }
+
+  /* ---------- 控制条 ---------- */
+  .bar {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px; margin-bottom: 16px;
+  }
+  .bar button {
+    background: #16233c; color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 7px 18px; font-size: 14px; cursor: pointer;
+    font-family: inherit;
+  }
+  .bar button:hover { border-color: var(--acc); color: var(--acc); }
+  .bar button:disabled { opacity: .35; cursor: not-allowed; }
+  .bar button.playing { border-color: var(--acc2); color: var(--acc2); }
+  .stepno { color: var(--muted); font-size: 13px; margin-left: auto; font-family: var(--mono); }
+  .stepno b { color: var(--acc); }
+
+  /* ---------- 流水线阶段条 ---------- */
+  .pipe { display: flex; align-items: stretch; gap: 0; margin-bottom: 16px; flex-wrap: wrap; }
+  .stage {
+    flex: 1; min-width: 118px; text-align: center;
+    border: 1px solid var(--border); border-radius: 10px;
+    background: var(--panel2); padding: 10px 6px;
+    transition: all .25s;
+  }
+  .stage .t { font-size: 14px; font-weight: bold; }
+  .stage .d { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .stage.done { border-color: #3b5a7a; }
+  .stage.done .t { color: var(--acc); }
+  .stage.on {
+    border-color: var(--acc); background: #12233f;
+    box-shadow: 0 0 12px rgba(56, 189, 248, .25);
+  }
+  .stage.on .t { color: var(--acc); }
+  .pipe .arrow {
+    align-self: center; color: var(--muted); padding: 0 6px; font-size: 16px;
+  }
+
+  /* ---------- 主区：左详情 + 右面板 ---------- */
+  .main { display: flex; gap: 16px; align-items: flex-start; }
+  .detail {
+    flex: 1; min-width: 0; background: var(--panel);
+    border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px;
+    min-height: 420px;
+  }
+  .detail h3 { font-size: 17px; margin-bottom: 10px; color: var(--acc); }
+  .detail h3 .tag2 {
+    font-size: 11px; color: var(--acc2); border: 1px solid var(--acc2);
+    border-radius: 6px; padding: 1px 8px; vertical-align: 3px; margin-left: 8px;
+  }
+  .detail p { margin: 8px 0; }
+  .detail .muted { color: var(--muted); }
+  .panel {
+    width: 360px; flex-shrink: 0; background: var(--panel2);
+    border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px;
+    min-height: 420px;
+  }
+  .panel h4 { font-size: 13px; color: var(--acc2); letter-spacing: 1px; margin-bottom: 8px; }
+  .panel .io { margin: 10px 0; }
+  .panel .io .lbl {
+    display: inline-block; font-size: 11px; border-radius: 5px;
+    padding: 1px 8px; margin-bottom: 4px;
+  }
+  .panel .io .lbl.in  { background: rgba(56,189,248,.15); color: var(--acc); }
+  .panel .io .lbl.out { background: rgba(129,140,248,.15); color: var(--acc2); }
+  .panel pre, .detail pre {
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.6;
+    background: #0a1122; border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 12px; overflow-x: auto; white-space: pre; color: var(--text);
+    margin: 6px 0;
+  }
+  .kw { color: var(--acc2); font-weight: bold; }
+  .id { color: var(--text); }
+  .num { color: var(--good); }
+  .op { color: var(--warn); }
+  .cmt { color: #64748b; }
+  .hl { color: var(--acc); }
+  .gold { color: var(--warn); }
+  .bad { color: var(--bad); }
+  .good { color: var(--good); }
+
+  /* 代价表 */
+  table.cost { border-collapse: collapse; width: 100%; font-size: 13px; margin: 8px 0; }
+  table.cost th, table.cost td { border: 1px solid var(--border); padding: 6px 10px; text-align: right; }
+  table.cost th { background: #16233c; color: var(--muted); font-weight: normal; }
+  table.cost td.l, table.cost th.l { text-align: left; }
+  table.cost tr.pick { background: rgba(52,211,153,.08); }
+  table.cost tr.pick td { color: var(--good); }
+  table.cost tr.lose td { color: var(--muted); }
+
+  /* 火山模型 SVG 文字 */
+  svg text { font-family: var(--mono); }
+
+  .key {
+    border-left: 3px solid var(--acc2); background: rgba(129,140,248,.07);
+    padding: 8px 12px; margin: 10px 0; font-size: 13.5px; border-radius: 0 8px 8px 0;
+  }
+  .key b { color: var(--acc2); }
+
+  table.res { border-collapse: collapse; font-size: 13px; margin: 8px 0; }
+  table.res th, table.res td { border: 1px solid var(--border); padding: 5px 16px; }
+  table.res th { background: #16233c; color: var(--muted); font-weight: normal; }
+  .foot { color: #64748b; font-size: 12px; margin-top: 20px; }
+</style>
+</head>
+<body>
+
+<h1>一条 SQL 的<span class="hl">旅程</span>：从字符串到结果的五道工序</h1>
+<div class="sub">
+  查询：<code>SELECT u.name FROM users u JOIN orders o ON u.id=o.uid WHERE o.amount&gt;100</code>
+  &nbsp;·&nbsp; 与 02_cost_model.cpp 演的是同一条、同一套账（users 5000 行 / orders 50000 行）
+</div>
+
+<div class="bar">
+  <button id="btnPrev">← 上一步</button>
+  <button id="btnNext">下一步 →</button>
+  <button id="btnAuto">▶ 自动播放</button>
+  <button id="btnReset">⟲ 重置</button>
+  <span class="stepno">阶段 <b id="stageNo">1</b>/6 · 步 <b id="stepNo">1</b>/<b id="stepAll">14</b></span>
+</div>
+
+<div class="pipe" id="pipe"></div>
+
+<div class="main">
+  <div class="detail" id="detail"></div>
+  <div class="panel" id="panel"></div>
+</div>
+
+<div class="foot">
+  自包含页面，零外部资源。配套源码：01_join_algorithms.cpp（四种 join 真跑）、
+  02_cost_model.cpp（本页代价表的完整实现）、03_explain_drills.sql（真实 EXPLAIN 解读）。
+</div>
+
+<script>
+// ============================================================
+// 全部 ES5（无箭头函数 / let / 模板串），零外部依赖
+// ============================================================
+
+var STAGES = [
+  { t: "SQL", d: "一串字符" },
+  { t: "解析器", d: "词法 + 语法树" },
+  { t: "重写器", d: "规范化改写" },
+  { t: "优化器", d: "候选 + 打分" },
+  { t: "执行器", d: "火山模型 next()" },
+  { t: "结果", d: "行流回客户端" }
+];
+
+// ---------- 火山模型的执行统计（随步骤推进的展示值） ----------
+// 数字与 02_cost_model.cpp 的真实统计口径一致：
+// 选择率 99% → 50000 行里过滤后约 49500 行，全部能命中 users
+var EXEC = {
+  build:  [0, 1800, 5000],   // 哈希表已插入行数
+  scanned: [0, 0, 6200, 50000], // orders 已扫行数
+  passed: [0, 0, 6140, 49500],  // 过滤后放行行数
+  out:    [0, 0, 6138, 49500]   // join 输出行数
+};
+
+// ---------- 每一步 ----------
+// stage: 高亮第几道工序(0..5)
+// html : 左侧详情
+// ptitle / pin / pout: 右侧面板标题 / 输入 / 输出
+// exec : 可选，火山图状态 {phase:'idle'|'call'|'build'|'probe'|'eof', b, sc, pa, ou}
+var STEPS = [
+
+// ---- 工序 0：SQL ----
+{
+  stage: 0,
+  html:
+    '<h3>第 0 道工序：你交给引擎的，只是一串字符<span class="tag2">SQL</span></h3>' +
+    '<p>程序发过来的东西，在引擎眼里跟一封电报没区别：</p>' +
+    '<pre><span class="kw">SELECT</span> u.name\n<span class="kw">FROM</span> users u <span class="kw">JOIN</span> orders o <span class="kw">ON</span> u.id<span class="op">=</span>o.uid\n<span class="kw">WHERE</span> o.amount<span class="op">&gt;</span><span class="num">100</span>;</pre>' +
+    '<p>此刻引擎对它一无所知：不知道 users 是哪张表、不知道 amount&gt;100 要多少行、' +
+    '更不知道该怎么执行。<b class="hl">接下来的一切，就是把这串字符逐步加工成"怎么干活"。</b></p>' +
+    '<div class="key"><b>师傅点拨：</b>把 SQL 想成 C++ 源码，把引擎想成编译器——' +
+    '也有词法、语法树、中间表示、优化、代码生成，只不过"运行时代码"是拿数据来跑的算子树。</div>',
+  ptitle: "工序 0 · SQL 原文",
+  pin: "客户端发来的一串字节：\nSELECT u.name FROM users u JOIN orders o ON u.id=o.uid WHERE o.amount>100;",
+  pout: "还是那串字节 —— 什么都没发生。\n加工才刚开始。"
+},
+
+// ---- 工序 1：解析器 ----
+{
+  stage: 1,
+  html:
+    '<h3>第 1 道工序（上）：词法分析 — 把字符串剁成 token<span class="tag2">解析器</span></h3>' +
+    '<p>解析器第一步跟 C++ 编译器一模一样：把字符流剁成有意义的词：</p>' +
+    '<pre>[<span class="kw">SELECT</span>] [<span class="id">u</span>][<span class="op">.</span>][<span class="id">name</span>]\n[<span class="kw">FROM</span>] [<span class="id">users</span>][<span class="id">u</span>] [<span class="kw">JOIN</span>] [<span class="id">orders</span>][<span class="id">o</span>]\n[<span class="kw">ON</span>] [<span class="id">u</span>][<span class="op">.</span>][<span class="id">id</span>][<span class="op">=</span>][<span class="id">o</span>][<span class="op">.</span>][<span class="id">uid</span>]\n[<span class="kw">WHERE</span>] [<span class="id">o</span>][<span class="op">.</span>][<span class="id">amount</span>][<span class="op">&gt;</span>][<span class="num">100</span>][<span class="op">;</span>]</pre>' +
+    '<p class="muted">关键字？标识符？数字？运算符？—— 一个个贴标签。拼错一个字母，这里就报 syntax error。</p>',
+  ptitle: "工序 1 · 词法分析",
+  pin: "一串字符（46 个字节）",
+  pout: "一串 token（关键字/标识符/运算符/字面量）\n\n此时还不知道 u 是什么 —— 词法只管切词，不管含义。"
+},
+{
+  stage: 1,
+  html:
+    '<h3>第 1 道工序（下）：语法分析 — token 拼成语法树<span class="tag2">解析器</span></h3>' +
+    '<p>按 SQL 文法把 token 搭成树（跟编译器从源码生成 AST 一个道理）：</p>' +
+    '<pre>SELECT\n ├─ target：<span class="id">u.name</span>\n ├─ from ：<span class="kw">JOIN</span>\n │    ├─ 左：<span class="id">users</span> AS <span class="hl">u</span>\n │    ├─ 右：<span class="id">orders</span> AS <span class="hl">o</span>\n │    └─ on ：<span class="id">o.uid</span> <span class="op">=</span> <span class="id">u.id</span>\n └─ where：<span class="id">o.amount</span> <span class="op">&gt;</span> <span class="num">100</span></pre>' +
+    '<p>树搭起来，含义就"半懂"了：知道有张表叫 users、有个条件叫 amount&gt;100。' +
+    '但注意 —— <b class="gold">树只是把话说明白，还没决定怎么干活。</b>' +
+    '你写的 JOIN 顺序（users 在前）在这里还只是字面意思。</p>',
+  ptitle: "工序 1 · 语法分析",
+  pin: "token 流",
+  pout: "语法树（AST）\n\n输入 SELECT u.naem ... → 到这里就死了：\nnear \"n\": syntax error。\n解析器是唯一「讲语法」的一道工序。"
+},
+
+// ---- 工序 2：重写 ----
+{
+  stage: 2,
+  html:
+    '<h3>第 2 道工序（上）：重写 — 别名解析与"条件大平层"<span class="tag2">重写器</span></h3>' +
+    '<p>重写器拿着语法树去数据字典里对账：users 存在吗？u.name 是哪一列？然后做等价改写。' +
+    'SQLite 在这里干了一件影响深远的事：<b class="hl">把 ON 条件拆进 WHERE 约束列表</b>：</p>' +
+    '<pre><span class="cmt">-- 改写后（逻辑等价）</span>\n<span class="kw">SELECT</span> <span class="id">users.name</span>\n<span class="kw">FROM</span> <span class="id">orders</span> <span class="kw">AS</span> o, <span class="id">users</span> <span class="kw">AS</span> u\n<span class="kw">WHERE</span> o.amount <span class="op">&gt;</span> <span class="num">100</span>\n  <span class="kw">AND</span>  o.uid <span class="op">=</span> u.id   <span class="cmt">-- ON 搬进来了</span></pre>' +
+    '<p>内连接的 ON 和 WHERE 本来就是语义等价的（外连接不行，所以只有内连接这么干）。' +
+    '拆平之后，优化器面对的就是一堆<b>可以任意挑拣重排的约束</b>，而不是你写下的句子结构。</p>',
+  ptitle: "工序 2 · 规范化",
+  pin: "语法树 + 数据字典（表/列/索引元数据）",
+  pout: "解析后的约束列表：\n  ① o.amount > 100\n  ② o.uid = u.id\n目标列：users.name\n\n你写的句式被「拆字入库」了。"
+},
+{
+  stage: 2,
+  html:
+    '<h3>第 2 道工序（下）：你写的顺序 ≠ 执行的顺序<span class="tag2">重写器</span></h3>' +
+    '<p>你写的是 <code>FROM users u JOIN orders o</code> —— users 在前。但改写后是' +
+    '<code>FROM orders, users</code>：<b class="hl">SQLite 把表序翻了个（按名字/行数启发式先挪一挪）。</b></p>' +
+    '<p>更关键的在后面：这只是"初稿"。真正的表序决定权在优化器手里——' +
+    '03 演练题第 10 题里 SQLite 实测把 5 万行 users 选成驱动表，把 100 万行 orders 翻成了内表，' +
+    '跟你写的顺序完全相反。</p>' +
+    '<div class="key"><b>记住这句话：</b>SQL 是<b>声明语言</b>——你说"要什么"，' +
+    '不说"怎么做"。从"要什么"到"怎么做"的翻译，就是重写 + 优化这两道工序。</div>',
+  ptitle: "工序 2 · 顺序自由",
+  pin: "约束列表",
+  pout: "带候选空间的逻辑计划：\n表集合 {users, orders}\njoin 方式待定、表序待定、\n访问路径（全扫/走索引）待定\n\n—— 全部留给下一步算账。"
+},
+
+// ---- 工序 3：优化器 ----
+{
+  stage: 3,
+  html:
+    '<h3>第 3 道工序（上）：优化器先列候选，不拍脑袋<span class="tag2">优化器</span></h3>' +
+    '<p>优化器 = 枚举 + 算账。对这条查询，光"访问路径 × join 算法"就能组合出几个候选：</p>' +
+    '<pre><span class="hl">A</span> 全表扫 orders（顺带过滤）→ <span class="hl">Hash Join</span>（users 建哈希表）\n' +
+    '<span class="gold">C</span> idx_amount 范围扫 → 回表取 uid → <span class="gold">Index Nested Loop</span>（逐行点查 users 主键）\n\n' +
+    '<span class="cmt">（真实优化器还枚举 B 全表NL、D 排序归并，见 02_cost_model.cpp；\n  本页挑两个最有代表性的对比）</span></pre>' +
+    '<p>两个候选乍看都对："C 用上了索引，肯定比 A 傻扫快吧？"—— <b class="bad">账不是这么算的。</b>' +
+    '下一页，摊开算。</p>',
+  ptitle: "工序 3 · 枚举",
+  pin: "逻辑计划 + 统计信息：\n  orders：50000 行 / 500 页，idx_amount 树高 3\n  users：5000 行 / 50 页，主键树高 2\n  amount>100 选择率：99%（统计是新的）",
+  pout: "候选计划清单（≥2 个），\n每个都还没算分。"
+},
+{
+  stage: 3,
+  html:
+    '<h3>第 3 道工序（中）：给每个候选记账<span class="tag2">代价模型</span></h3>' +
+    '<p class="muted">公式（02_cost_model.cpp 同款）：<b>代价 = 页读 × 1.0 + 比较 × 0.005</b>。' +
+    '一页磁盘读 ≈ 十万次比较，所以页权重大得离谱。</p>' +
+    '<table class="cost">' +
+    '<tr><th class="l">候选</th><th>页读</th><th>比较</th><th>代价</th></tr>' +
+    '<tr class="pick"><td class="l">★ A 全表扫 + Hash Join</td><td>550</td><td>104,500</td><td>1,072.5</td></tr>' +
+    '<tr class="lose"><td class="l">&nbsp;&nbsp;C 索引扫 + 回表 + Index NL</td><td>148,750</td><td>792,000</td><td>152,710</td></tr>' +
+    '</table>' +
+    '<p>账目明细：</p>' +
+    '<pre><span class="hl">A</span>：页 = 500(orders) + 50(users) = <b>550</b>\n' +
+    '    比较 = 50000(逐行过滤) + 5000(建哈希表) + 49500(探测) = 104500\n' +
+    '    代价 = 550 + 104500×0.005 = <b class="good">1072.5</b>\n\n' +
+    '<span class="gold">C</span>：页 = 索引250 + <b class="bad">回表49500(每行一次随机IO)</b> + join 99000(每行走一趟users树) = <b>148750</b>\n' +
+    '    比较 = 49500×16 = 792000\n' +
+    '    代价 = 148750 + 792000×0.005 = <b class="bad">152710</b></pre>',
+  ptitle: "工序 3 · 打分",
+  pin: "候选清单 + 统计",
+  pout: "每个候选一个分数：\n  A = 1,072.5\n  C = 152,710\n\nC 的败因不是索引慢，是<b>回表和点查要跑 49500 次</b>——选择率 99%，索引白建。"
+},
+{
+  stage: 3,
+  html:
+    '<h3>第 3 道工序（下）：拍板 —— 但会计不是预言家<span class="tag2">优化器</span></h3>' +
+    '<p>A 的代价是 C 的 <b class="good">1/142</b>。优化器选 A。这个决定完全正确——' +
+    '<b class="gold">前提是统计是新的</b>（知道 amount&gt;100 命中 99%）。</p>' +
+    '<p>02_cost_model.cpp 里演过反面剧本：统计过期（还以为只命中 0.1%，50 行）时，' +
+    '同一套算账逻辑会"正确地"选 C——50 次回表当然便宜。可真实要回表 49500 次，' +
+    '实际比 A 慢 <b class="bad">973 倍</b>。</p>' +
+    '<div class="key"><b>师傅点拨：</b>优化器的锅，一半在算账，一半在料。' +
+    '计划诡异先别骂引擎，<code class="gold">ANALYZE</code> 一下再来。SQLite 里它填的正是' +
+    'sqlite_stat1 这本账。</div>',
+  ptitle: "工序 3 · 拍板",
+  pin: "打分表",
+  pout: "选中的物理计划：\n  SCAN o (USE COVERING...)\n  → BUILD哈希(u)\n  → PROBE\n\n—— 这就是 EXPLAIN QUERY PLAN\n给你看的那几行的来源。"
+},
+
+// ---- 工序 4：执行器（火山模型） ----
+{
+  stage: 4,
+  exec: { phase: 'idle', b: 0, sc: 0, pa: 0, ou: 0, call: 0 },
+  html:
+    '<h3>第 4 道工序（一）：执行器把计划搭成算子树<span class="tag2">火山模型</span></h3>' +
+    '<p>选中的计划被实例化成一颗<b>算子树</b>。每个算子只有一个方法——' +
+    '<code class="hl">next()</code>：被上层调一次，吐一行；吐光了说 EOF。' +
+    '跟 C++ 迭代器 <code>iterator::operator++</code> 一个签名一个意思：</p>' +
+    '<pre>class Op {\n  <span class="kw">Row</span>* <span class="hl">next</span>();   <span class="cmt">// 拉一行；返回 0 表示没了</span>\n  <span class="kw">void</span> close();\n};</pre>' +
+    '<p>看右下的算子树（本页最核心的图）：顶上 Root 是"输出 u.name"，' +
+    '下面挂着 Hash Join，Join 的左手是 过滤←orders全扫，右手是 users 全扫（负责建表）。</p>' +
+    '<div class="key"><b>火山模型的本质：</b>数据不是被"推"下来的，' +
+    '是被上层 one row at a time <b>拉</b>上去的。控制流自上而下，数据流自下而上。</div>',
+  ptitle: "工序 4 · 算子树",
+  pin: "物理计划（优化器的拍板）",
+  pout: "算子树（见左侧图）。\n每个算子封装一小段活儿，\n接口统一得让上层根本\n不关心下层是谁。"
+},
+{
+  stage: 4,
+  exec: { phase: 'call', b: 0, sc: 0, pa: 0, ou: 0, call: 1 },
+  html:
+    '<h3>第 4 道工序（二）：next() 调用链“咔”地扎到树底<span class="tag2">火山模型</span></h3>' +
+    '<p>客户端要第一行 → Root.next() → Join.next() → Filter.next() → Scan(orders).next()。' +
+    '<b class="hl">左边的下箭头</b>就是这次调用链，扎到最底下要数据。</p>' +
+    '<p>但 Hash Join 有个性：它的 <code>next()</code> 第一次被调时，会<b>先把右手边 users 整张表读完</b>' +
+    '建成哈希表，才伸手向左手边要第一行。这一步叫 <b>BUILD</b>——火山模型里唯一的"憋大招"时刻。</p>',
+  ptitle: "工序 4 · 控制流向下",
+  pin: "客户端：给我一行",
+  pout: "next() 调用链穿过整棵树：\nRoot → Join → Filter → Scan\n\n第一行的代价：先还 5000 行\n建表的「欠账」（见下一步）。"
+},
+{
+  stage: 4,
+  exec: { phase: 'build', b: 1, sc: 0, pa: 0, ou: 0, call: 0 },
+  html:
+    '<h3>第 4 道工序（三）：BUILD — 右手边 5000 行进哈希表<span class="tag2">火山模型</span></h3>' +
+    '<p>Join 内部：反复调 Scan(users).next()，每来一行就以 <code>id</code> 为 key 塞进哈希表。' +
+    '5000 行、50 页，全扫一遍，比较 5000 次。图中哈希表正在进食（计数器在走）。</p>' +
+    '<pre><span class="kw">while</span> ((r = scanUsers.<span class="hl">next</span>()) != EOF)\n    hash.insert(r.id, r.name);   <span class="cmt">// BUILD：只进不出</span></pre>' +
+    '<p class="muted">这就是 01 里 Hash Join 完胜的底气之一：5000 行 × 每行一次哈希插入，' +
+    '总共 5000 次操作。右边 users 扫完，才会去动左边的 orders。</p>',
+  ptitle: "工序 4 · BUILD 阶段",
+  pin: "右手输入：users 全扫\n正在读第 36/50 页\n（计数见左图底部：1,800 / 5000）",
+  pout: "内存哈希表：\n  key = u.id\n  value = u.name\n5000 个槽位就位。\n\n比较次数：5000（每行一次插入）。"
+},
+{
+  stage: 4,
+  exec: { phase: 'probe', b: 2, sc: 1, pa: 1, ou: 1, call: 0, row: 1 },
+  html:
+    '<h3>第 4 道工序（四）：PROBE — 一行数据的完整旅程<span class="tag2">火山模型</span></h3>' +
+    '<p>哈希表就绪，Join 伸手向左手要行。<b class="hl">右边的上箭头</b>是一行 orders 的旅程：</p>' +
+    '<pre>① Scan(orders).next()   → (uid=123, amount=8848, ...)   <span class="cmt">// 从第 37 页拉出一行</span>\n② Filter.next()         → amount=8848 <span class="good">&gt; 100 ✓ 放行</span>\n③ Join：hash.find(<span class="hl">123</span>) → <span class="good">命中</span> "user_123"\n④ Root：只留 name 列 → 吐给客户端</pre>' +
+    '<p>这一行共花：1 次页内读取 + 1 次比较(过滤) + 1 次哈希查找 ≈ <b class="good">2 次比较</b>。' +
+    '同等信息量，01 里 Index Join 每行要走两趟 B+ 树做 14 次比较——算法的差距就是在这一步一步攒出来的。</p>',
+  ptitle: "工序 4 · 单行旅程",
+  pin: "orders 第 6,200 行：\n  uid=123, amount=8848",
+  pout: "比较三笔账（本行）：\n  过滤 1 次\n  哈希探测 1 次\n  join 命中 → 输出 1 行\n\n累计输出 6,138 行（见左图）。\n后面还要再来 43,362 次。"
+},
+{
+  stage: 4,
+  exec: { phase: 'eof', b: 2, sc: 3, pa: 3, ou: 3, call: 0 },
+  html:
+    '<h3>第 4 道工序（五）：循环到 EOF<span class="tag2">火山模型</span></h3>' +
+    '<p>②③④ 重复五万次，直到 Scan(orders) 说"没了"。Join 向上传 EOF，Root 收尾，' +
+    '各算子 close()，哈希表释放。计数器定格：</p>' +
+    '<table class="cost">' +
+    '<tr><th class="l">计数器</th><th>终值</th><th>说明</th></tr>' +
+    '<tr><td class="l">users 建表</td><td>5,000 行</td><td class="l">50 页，只此一遍</td></tr>' +
+    '<tr><td class="l">orders 扫描</td><td>50,000 行</td><td class="l">500 页，顺序全扫</td></tr>' +
+    '<tr><td class="l">过滤放行</td><td>49,500 行</td><td class="l">99% 选择率（索引此刻帮倒忙的根源）</td></tr>' +
+    '<tr class="pick"><td class="l">join 输出</td><td>49,500 行</td><td class="l">全部命中（uid 无悬空时）</td></tr>' +
+    '</table>' +
+    '<p class="muted">总账：550 页 + 约 104,500 次比较 ≈ 优化器估的 1,072.5 —— 估得准，因为统计新。</p>',
+  ptitle: "工序 4 · 收官",
+  pin: "orders 逐行供给\n（500 页顺序读）",
+  pout: "49,500 行输出流\n逐行交给 Root。\n\n实测（01 同规模，量级）：\nHash ~0.8ms <\nSort-Merge ~2.4ms <\nIndex Join ~2.8ms <<\n块嵌 NL ~150ms。"
+},
+
+// ---- 工序 5：结果 ----
+{
+  stage: 5,
+  exec: { phase: 'eof', b: 2, sc: 3, pa: 3, ou: 3, call: 0 },
+  html:
+    '<h3>第 5 道工序：结果流回客户端<span class="tag2">结果</span></h3>' +
+    '<p>Root 每吐一行，引擎就发给客户端一行（不是攒满 49500 行才发——这也是"拉"模型的福利，' +
+    '配合 <code class="gold">LIMIT 10</code> 拿够就断，剩下的根本不执行，见 03 演练 Q13）：</p>' +
+    '<table class="res"><tr><th>name</th></tr><tr><td>user_123</td></tr><tr><td>user_7</td></tr>' +
+    '<tr><td>user_4501</td></tr><tr><td class="cmt">…（49,497 行）</td></tr></table>' +
+    '<div class="key"><b>全程复盘：</b>字符串 → token → 语法树 → 约束列表 → 候选×代价 → 算子树 → 行流。' +
+    '六道工序，一道都不能少。<b>EXPLAIN QUERY PLAN 打印的，就是第四道工序的产物。</b>' +
+    '所以看得懂代价，才看得懂计划——这就是本关把 02（会计）排在 03（读计划）前面的原因。</div>',
+  ptitle: "全旅程总结",
+  pin: "算子树输出的 49,500 行",
+  pout: "客户端拿到的结果集。\n\n六道工序各干了啥：\n① 切词 ② 搭树 ③ 拆平\n④ 算账选计划 ⑤ 拉数据\n⑥ 流式回传\n\n下一步：打开 sqlite3，\n用 EXPLAIN QUERY PLAN 亲眼看。"
+}
+];
+
+// ============================================================
+// 渲染与状态机
+// ============================================================
+var cur = 0;
+var timer = null;
+
+function $(id) { return document.getElementById(id); }
+
+// ---------- 阶段条 ----------
+function renderPipe() {
+  var h = '';
+  for (var i = 0; i < STAGES.length; i++) {
+    var cls = 'stage';
+    if (i < STEPS[cur].stage) cls += ' done';
+    if (i === STEPS[cur].stage) cls += ' on';
+    h += '<div class="' + cls + '"><div class="t">' + STAGES[i].t + '</div><div class="d">' + STAGES[i].d + '</div></div>';
+    if (i < STAGES.length - 1) h += '<div class="arrow">→</div>';
+  }
+  $('pipe').innerHTML = h;
+}
+
+// ---------- 右侧面板 ----------
+function renderPanel() {
+  var s = STEPS[cur];
+  var h = '<h4>' + s.ptitle + '</h4>';
+  h += '<div class="io"><span class="lbl in">输入</span><pre>' + s.pin + '</pre></div>';
+  h += '<div class="io"><span class="lbl out">输出</span><pre>' + s.pout + '</pre></div>';
+  $('panel').innerHTML = h;
+}
+
+// ---------- 火山模型 SVG ----------
+// 布局：Root 顶部；Join 中间；左列 Filter←Scan(orders)；右列 Scan(users)→哈希表
+function volcanoSvg(st) {
+  var s = '';
+  // 注：innerHTML 注入时 HTML5 解析器自动进 SVG 命名空间，无需写 xmlns，
+  // 正好也让本页保持"全文件零外链协议字样"（自包含、离线可用，一眼可验证）
+  s += '<svg width="100%" height="252" viewBox="0 0 640 252">';
+  s += '<defs>';
+  s += '<marker id="au" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#34d399"/></marker>';
+  s += '<marker id="ad" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#fbbf24"/></marker>';
+  s += '</defs>';
+
+  function box(x, y, w, label, sub, active) {
+    var stroke = active ? '#38bdf8' : '#263449';
+    var fill = active ? '#12233f' : '#0b1426';
+    var g = '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="46" rx="9" fill="' + fill + '" stroke="' + stroke + '" stroke-width="' + (active ? 2 : 1.2) + '"/>';
+    g += '<text x="' + (x + w / 2) + '" y="' + (y + 20) + '" fill="#e2e8f0" font-size="13.5" text-anchor="middle">' + label + '</text>';
+    if (sub) g += '<text x="' + (x + w / 2) + '" y="' + (y + 37) + '" fill="#94a3b8" font-size="10.5" text-anchor="middle">' + sub + '</text>';
+    return g;
+  }
+
+  // 上箭头（数据流，绿）：Scan→上层
+  function up(x, y1, y2, on) {
+    var c = on ? '#34d399' : '#263449';
+    return '<line x1="' + x + '" y1="' + y1 + '" x2="' + x + '" y2="' + y2 + '" stroke="' + c + '" stroke-width="' + (on ? 2.2 : 1.2) + '"' + (on ? ' marker-end="url(#au)"' : '') + '/>';
+  }
+  // 下箭头（next 调用，黄）
+  function down(x, y1, y2, on) {
+    var c = on ? '#fbbf24' : '#263449';
+    var d = on ? '' : ' stroke-dasharray="1 0"';
+    return '<line x1="' + x + '" y1="' + y1 + '" x2="' + x + '" y2="' + y2 + '" stroke="' + c + '" stroke-width="' + (on ? 2.2 : 1.2) + '"' + (on ? ' marker-end="url(#ad)"' : d) + '/>';
+  }
+
+  var ph = st.phase;
+  var probeOn = (ph === 'probe' || ph === 'eof');
+  var callOn = (ph === 'call');
+  var buildOn = (ph === 'build');
+
+  // 树骨架：
+  //   Root(260,10)          Join(240,92)
+  //   Filter(60,178)  ScanUsers(430,178)   哈希表(556,92)
+  //   ScanOrders(60,...) 在 Filter 下方？空间不够 → 把 ScanOrders 放 Filter 下面一行
+  // 简化为两层左列：ScanOrders(60,178) → Filter(60,178) 合并成一个框 "SCAN orders → FILTER"
+  s += box(250, 8, 150, 'Root', '输出 u.name', ph === 'eof');
+  s += box(225, 88, 200, 'HASH JOIN', ph === 'probe' ? 'PROBE 中…' : 'next() 首次先 BUILD', ph === 'probe' || ph === 'build' || ph === 'call');
+  s += box(30, 172, 210, 'SCAN orders → FILTER', 'amount > 100', probeOn);
+  s += box(420, 172, 150, 'SCAN users', '全扫 50 页', buildOn || ph === 'call');
+
+  // 数据流（绿，右行 x=180 左链 / x=540 右链）
+  s += up(180, 170, 140, probeOn);   // Filter → Join（左供行）
+  s += up(300, 86, 58, probeOn);     // Join → Root
+  s += up(540, 170, 140, buildOn);   // users → Join（BUILD）
+
+  // next() 调用链（黄，左行 x=120 / 右行 x=480）
+  s += down(120, 58, 168, callOn);   // 调用链示意：Root 侧一路扎到树底
+
+  // Join ↔ 哈希表
+  s += '<line x1="425" y1="111" x2="552" y2="111" stroke="' + (buildOn || probeOn ? '#818cf8' : '#263449') + '" stroke-width="1.5"/>';
+  // 哈希表（圆柱）
+  var hOn = (ph === 'probe' || ph === 'eof');
+  s += '<ellipse cx="590" cy="80" rx="34" ry="9" fill="' + (hOn ? '#12233f' : '#0b1426') + '" stroke="' + (hOn ? '#818cf8' : '#263449') + '" stroke-width="1.5"/>';
+  s += '<rect x="556" y="80" width="68" height="56" fill="' + (hOn ? '#12233f' : '#0b1426') + '" stroke="none"/>';
+  s += '<line x1="556" y1="80" x2="556" y2="136" stroke="' + (hOn ? '#818cf8' : '#263449') + '" stroke-width="1.5"/>';
+  s += '<line x1="624" y1="80" x2="624" y2="136" stroke="' + (hOn ? '#818cf8' : '#263449') + '" stroke-width="1.5"/>';
+  s += '<ellipse cx="590" cy="136" rx="34" ry="9" fill="none" stroke="' + (hOn ? '#818cf8' : '#263449') + '" stroke-width="1.5"/>';
+  s += '<text x="590" y="106" fill="' + (hOn ? '#818cf8' : '#64748b') + '" font-size="11" text-anchor="middle">哈希表</text>';
+  s += '<text x="590" y="120" fill="#94a3b8" font-size="10" text-anchor="middle">' + (EXEC.build[st.b] > 0 ? EXEC.build[st.b] + ' 条' : '空') + '</text>';
+
+  // 一行流动的小球（probe 单行演示）
+  if (ph === 'probe' && st.row) {
+    s += '<circle cx="180" cy="155" r="5" fill="#34d399"/>';
+    s += '<text x="196" y="159" fill="#34d399" font-size="10">一行</text>';
+    s += '<circle cx="300" cy="72" r="5" fill="#34d399"/>';
+    s += '<text x="316" y="76" fill="#34d399" font-size="10">输出</text>';
+  }
+
+  // 计数器条
+  s += '<text x="30" y="245" fill="#94a3b8" font-size="11">orders 已扫 ' + EXEC.scanned[st.sc] +
+       '</text><text x="190" y="245" fill="#94a3b8" font-size="11">放行 ' + EXEC.passed[st.pa] +
+       '</text><text x="320" y="245" fill="#34d399" font-size="11">输出 ' + EXEC.out[st.ou] +
+       '</text><text x="440" y="245" fill="#fbbf24" font-size="11">BUILD ' + EXEC.build[st.b] + '/5000</text>';
+
+  // 图例
+  s += '<text x="470" y="20" fill="#fbbf24" font-size="10.5">──▶ next() 调用（向下）</text>';
+  s += '<text x="470" y="36" fill="#34d399" font-size="10.5">──▶ 行数据（向上）</text>';
+
+  s += '</svg>';
+  return s;
+}
+
+// ---------- 左侧详情 ----------
+function renderDetail() {
+  var s = STEPS[cur];
+  var h = s.html;
+  if (s.exec) {
+    h += volcanoSvg(s.exec);
+  }
+  $('detail').innerHTML = h;
+}
+
+function render() {
+  renderPipe();
+  renderPanel();
+  renderDetail();
+  $('stageNo').innerHTML = (STEPS[cur].stage + 1);
+  $('stepNo').innerHTML = (cur + 1);
+  $('stepAll').innerHTML = STEPS.length;
+  $('btnPrev').disabled = (cur === 0);
+  $('btnNext').disabled = (cur === STEPS.length - 1);
+}
+
+function go(n) {
+  if (n < 0) n = 0;
+  if (n > STEPS.length - 1) n = STEPS.length - 1;
+  cur = n;
+  if (timer && cur === STEPS.length - 1) stopAuto();
+  render();
+}
+
+function startAuto() {
+  if (timer) return;
+  $('btnAuto').innerHTML = '❚❚ 暂停';
+  $('btnAuto').className = 'playing';
+  timer = setInterval(function () {
+    if (cur >= STEPS.length - 1) { stopAuto(); return; }
+    go(cur + 1);
+  }, 2200);
+}
+function stopAuto() {
+  if (timer) { clearInterval(timer); timer = null; }
+  $('btnAuto').innerHTML = '▶ 自动播放';
+  $('btnAuto').className = '';
+}
+
+$('btnPrev').onclick = function () { stopAuto(); go(cur - 1); };
+$('btnNext').onclick = function () { stopAuto(); go(cur + 1); };
+$('btnAuto').onclick = function () {
+  if (timer) { stopAuto(); }
+  else { if (cur >= STEPS.length - 1) go(0); startAuto(); }
+};
+$('btnReset').onclick = function () { stopAuto(); go(0); };
+
+render();
+</script>
+</body>
+</html>

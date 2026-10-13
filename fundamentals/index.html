@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第 1 关 · 筑基期：关系模型与 SQL — 数据库学习路线</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface-2: #334155;
+    --ink: #f1f5f9;
+    --ink-muted: #94a3b8;
+    --ink-dim: #64748b;
+    --rule: #334155;
+    --accent: #38bdf8;
+    --accent-2: #818cf8;
+    --ok: #4ade80;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --mono: "Consolas", "Cascadia Mono", "Courier New", ui-monospace, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                 "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.7;
+    font-size: 14px;
+    padding: 34px 20px 70px;
+  }
+  .container { max-width: 1120px; margin: 0 auto; }
+
+  .header { text-align: center; margin-bottom: 30px; }
+  .header .stage {
+    display: inline-block;
+    font-size: 12px;
+    letter-spacing: .12em;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    padding: 3px 14px;
+    margin-bottom: 14px;
+  }
+  .header h1 {
+    font-size: 2rem;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 10px;
+  }
+  .header p { color: var(--ink-muted); font-size: 14px; max-width: 720px; margin: 0 auto; }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 14px;
+    padding: 22px 26px;
+    margin-bottom: 22px;
+  }
+  .panel h2 {
+    font-size: 16px;
+    color: var(--accent);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .panel p { color: var(--ink-muted); font-size: 13.5px; }
+
+  .why { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 12px; }
+  .why > div {
+    background: rgba(56,189,248,.06);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--accent-2);
+    border-radius: 9px;
+    padding: 12px 14px;
+    font-size: 13px;
+    color: var(--ink-muted);
+  }
+  .why b { color: var(--ink); display: block; margin-bottom: 4px; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin: 18px 0 8px; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 14px;
+    padding: 20px;
+    text-decoration: none;
+    color: inherit;
+    display: block;
+    position: relative;
+    overflow: hidden;
+    transition: transform .18s, border-color .18s, box-shadow .18s;
+  }
+  .card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  }
+  .card:hover {
+    transform: translateY(-4px);
+    border-color: var(--accent);
+    box-shadow: 0 12px 32px rgba(2, 6, 23, .6);
+  }
+  .card .no {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-dim);
+    margin-bottom: 6px;
+  }
+  .card .title { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+  .card .title code { font-family: var(--mono); color: var(--accent); font-size: 15px; }
+  .card .desc { font-size: 12.5px; color: var(--ink-muted); line-height: 1.65; min-height: 60px; }
+  .card .tags { margin-top: 12px; display: flex; gap: 7px; flex-wrap: wrap; }
+  .tag {
+    font-size: 10.5px;
+    padding: 2px 9px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    color: var(--ink-muted);
+  }
+  .tag.star { background: rgba(56,189,248,.16); color: var(--accent); }
+  .tag.tool { background: rgba(129,140,248,.16); color: var(--accent-2); }
+  .tag.live { background: rgba(74,222,128,.14); color: var(--ok); }
+
+  .order { counter-reset: st; margin-top: 10px; }
+  .order li {
+    list-style: none;
+    counter-increment: st;
+    padding: 10px 0 10px 46px;
+    position: relative;
+    border-bottom: 1px dashed var(--rule);
+    color: var(--ink-muted);
+    font-size: 13.5px;
+  }
+  .order li:last-child { border-bottom: none; }
+  .order li::before {
+    content: counter(st);
+    position: absolute; left: 6px; top: 10px;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #0b1220;
+    font-weight: 700;
+    font-size: 13px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .order code { font-family: var(--mono); color: var(--accent); }
+  .order b { color: var(--ink); }
+
+  pre.cmd {
+    background: #0b1220;
+    border: 1px solid var(--rule);
+    border-radius: 9px;
+    padding: 13px 16px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.85;
+    overflow-x: auto;
+    margin-top: 10px;
+  }
+  pre.cmd .c { color: var(--ink-dim); }
+  pre.cmd .k { color: var(--accent); }
+  pre.cmd .w { color: var(--warn); }
+  .note {
+    margin-top: 12px; padding: 10px 14px;
+    border-left: 3px solid var(--warn);
+    background: rgba(251,191,36,.07);
+    border-radius: 0 8px 8px 0;
+    font-size: 12.5px;
+    color: var(--ink-muted);
+  }
+  .note b { color: var(--warn); }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="stage">数据库学习路线 · 第 1 关</div>
+    <h1>筑基期 · 关系模型与 SQL</h1>
+    <p>
+      给会 C++ 的你：把表想成 <code style="font-family:var(--mono)">std::vector&lt;Row&gt;</code>，
+      主键想成 hash 容器的 key，视图想成一个保存下来的查询函数——
+      你不是从零开始，这一关只是换个战场继续打地基。
+    </p>
+  </div>
+
+  <div class="panel">
+    <h2>🧭 为什么这一关先学 SQL，不先讲原理？</h2>
+    <p>很多人一上来就啃 B 树、日志、MVCC，三个月后连 LEFT JOIN 都写不利索——本末倒置了。就像学 C++：你先学会用 vector 写程序，再去啃分配器和内存模型。没被慢查询咬过，看执行计划就像看天书；写过了、卡过了，原理一看就懂。所以这一关只干一件事：<b style="color:var(--ink)">把 SQL 写对、写熟、写出手感</b>。存储引擎、事务隔离、锁——留给下一关。</p>
+    <div class="why">
+      <div><b>表 ≈ std::vector&lt;Row&gt;</b>一行就是一条记录，列有类型、有顺序，行没有"指针"给你玩。</div>
+      <div><b>主键 ≈ hash 容器的 key</b>唯一、可定位，插重复的直接拒收——跟 insert 失败一个道理。</div>
+      <div><b>视图 ≈ 保存下来的查询函数</b>不存数据，每次"调用"现算；索引才是真的存了副本。</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>📁 文件卡片（7 个，全部离线可用）</h2>
+    <div class="cards">
+      <a class="card" href="tutorial.md">
+        <div class="no">MAP · 先读这个</div>
+        <div class="title"><code>tutorial.md</code></div>
+        <div class="desc">老师傅的带教手册：学习目标、两条坎、8 个必踩的坑、3 道课后练习。开工前通读一遍。</div>
+        <div class="tags"><span class="tag">地图</span><span class="tag">纯文本</span></div>
+      </a>
+      <a class="card" href="01_sql_tour.sql">
+        <div class="no">STEP 01 · 主菜</div>
+        <div class="title"><code>01_sql_tour.sql</code></div>
+        <div class="desc">13 节 SQL 全流程剧本：建表 → 查询 → 聚合 → JOIN → 子查询 → CTE → 窗口 → 索引 → 事务。每节"问题→SQL→要点"，注释里写了每条查询的预期结果，跑完自己对答案。</div>
+        <div class="tags"><span class="tag star">★ 核心</span><span class="tag live">sqlite3 可直接跑</span></div>
+      </a>
+      <a class="card" href="02_schema_design.sql">
+        <div class="no">STEP 02 · 设计</div>
+        <div class="title"><code>02_schema_design.sql</code></div>
+        <div class="desc">六种约束、一对多 / 一对一 / 多对多、一张大宽表从 1NF 拆到 3NF、什么时候故意反范式。含一条<b style="color:var(--warn)">故意失败</b>的外键插入，让你亲眼看报错。</div>
+        <div class="tags"><span class="tag star">★ 核心</span><span class="tag">三范式</span></div>
+      </a>
+      <a class="card" href="03_sql_cpp.cpp">
+        <div class="no">STEP 03 · 你的主场</div>
+        <div class="title"><code>03_sql_cpp.cpp</code></div>
+        <div class="desc">用 SQLite C API 逐条执行 01 的剧本：RAII 包句柄、结果表格化、EXPLAIN QUERY PLAN、10 万行"加索引前 vs 后"实测（约 38~50 倍差距）。单文件 g++ 直接编译。</div>
+        <div class="tags"><span class="tag star">★ 核心</span><span class="tag live">g++ 单文件编译</span></div>
+      </a>
+      <a class="card" href="sql_sandbox.html">
+        <div class="no">教具 ①</div>
+        <div class="title"><code>sql_sandbox.html</code></div>
+        <div class="desc">手写的迷你 SQL 引擎（纯 JS，没有 SQLite）。它没有索引只能全表扫，所以每条 SQL 都告诉你"扫了 N 行、命中 M 行"——没有索引的代价，看得见摸得着。</div>
+        <div class="tags"><span class="tag tool">双击打开</span><span class="tag">交互练习</span></div>
+      </a>
+      <a class="card" href="join_visualizer.html">
+        <div class="no">教具 ②</div>
+        <div class="title"><code>join_visualizer.html</code></div>
+        <div class="desc">JOIN 交互动画：左员工表右部门表，SVG 逐行连线。INNER / LEFT / RIGHT / FULL / CROSS 五种模式，"下一步"一行一步，没匹配上的标红画断头虚线。盯住两个钩子，五种 JOIN 一眼看穿。</div>
+        <div class="tags"><span class="tag tool">双击打开</span><span class="tag">动画演示</span></div>
+      </a>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>🪜 学习顺序（别乱）</h2>
+    <ol class="order">
+      <li><b>读地图</b>：通读 <code>tutorial.md</code>，知道两条坎和 8 个坑长什么样。</li>
+      <li><b>跑剧本</b>：用 sqlite3 跑 <code>01_sql_tour.sql</code>，逐节对着注释里的预期值核结果；顺手把不懂的 SQL 抄进 <code>sql_sandbox.html</code> 改着玩。</li>
+      <li><b>看动画</b>：打开 <code>join_visualizer.html</code>，五种模式各点一遍"下一步"，重点盯钱进（dept_id 为 NULL）和公关部（没人认领）。</li>
+      <li><b>学设计</b>：跑 <code>02_schema_design.sql</code>，看外键报错、看大宽表一层层拆到 3NF。</li>
+      <li><b>写 C++</b>：编译运行 <code>03_sql_cpp.cpp</code>，读懂 RAII 包装和索引对比，然后做文件末尾的 3 个练习。</li>
+      <li><b>交作业</b>：做 tutorial.md【五】里的 3 道课后练习。</li>
+    </ol>
+  </div>
+
+  <div class="panel">
+    <h2>⌨️ 命令行速查（PowerShell）</h2>
+    <pre class="cmd"><span class="c"># 进入本目录后：整体跑 SQL 剧本（-bail 表示一遇错就停，应当零报错）</span>
+<span class="k">sqlite3 -bail :memory: ".read 01_sql_tour.sql"</span>
+
+<span class="c"># 打开一个练习库文件（第一次跑完就留下了 readers/books/loans 三张表）</span>
+<span class="k">sqlite3 practice.db</span>
+sqlite&gt; <span class="k">.read 01_sql_tour.sql</span>
+sqlite&gt; <span class="k">.tables</span>                    <span class="c">-- 看有哪些表</span>
+sqlite&gt; <span class="k">.schema loans</span>               <span class="c">-- 看建表语句</span>
+sqlite&gt; <span class="k">.mode box</span>                   <span class="c">-- 结果画成表格，好认</span>
+sqlite&gt; <span class="k">SELECT</span> name, city <span class="k">FROM</span> readers <span class="k">WHERE</span> city = <span class="w">'北京'</span>;
+sqlite&gt; <span class="k">.quit</span>
+
+<span class="c"># 02 会故意制造一次外键报错，所以不加 -bail；退出码 1 是预期现象</span>
+<span class="k">sqlite3 :memory: ".read 02_schema_design.sql"</span>
+
+<span class="c"># 编译并运行 C++ 驱动（sqlite3 开发库已在 msys2 UCRT64）</span>
+<span class="k">g++ -std=c++17 -Wall -Wextra 03_sql_cpp.cpp -o 03_sql_cpp.exe -lsqlite3</span>
+<span class="k">.\03_sql_cpp.exe</span></pre>
+    <div class="note">
+      <b>开工前记住第一条军规：</b>SQLite 的外键约束<b>默认是关闭的</b>。每个新连接（每个 sqlite3 会话、每个 C++ 连接）都要先执行
+      <code style="font-family:var(--mono);color:var(--accent)">PRAGMA foreign_keys = ON;</code>，
+      否则脏数据照样塞进去，还不报错——这是 SQLite 的"特性"，不是你的错。
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

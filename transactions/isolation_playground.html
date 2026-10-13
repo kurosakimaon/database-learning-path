@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>双事务隔离级别游乐场 · 第 3 关</title>
+<style>
+  :root {
+    --bg: #0f172a; --bg2: #1e293b; --line: #334155;
+    --ink: #e2e8f0; --dim: #94a3b8;
+    --blue: #38bdf8; --indigo: #818cf8; --green: #34d399;
+    --amber: #fbbf24; --red: #f87171;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 14px/1.6 "Segoe UI", "Microsoft YaHei", sans-serif;
+    min-height: 100vh; padding: 20px 24px 40px;
+  }
+  h1 { font-size: 20px; }
+  h1 .tag { color: var(--indigo); }
+  .sub { color: var(--dim); font-size: 13px; margin: 4px 0 14px; }
+  .bar {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    background: var(--bg2); border: 1px solid var(--line);
+    border-radius: 10px; padding: 10px 12px; margin-bottom: 14px;
+  }
+  button {
+    background: #0b1220; color: var(--ink); border: 1px solid var(--line);
+    border-radius: 8px; padding: 7px 12px; cursor: pointer; font-size: 13px;
+    transition: all .15s;
+  }
+  button:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }
+  button:disabled { opacity: .35; cursor: not-allowed; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button { border: none; border-radius: 0; padding: 7px 10px; }
+  .seg button.on { background: var(--indigo); color: #0b1020; font-weight: 600; }
+  .lab { color: var(--dim); font-size: 12px; }
+  .sep { width: 1px; height: 26px; background: var(--line); margin: 0 4px; }
+  .grid { display: grid; grid-template-columns: 1fr 330px 1fr; gap: 14px; }
+  @media (max-width: 1000px) { .grid { grid-template-columns: 1fr; } }
+  .panel { background: var(--bg2); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .panel h2 { font-size: 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  .badge { font-size: 11px; border-radius: 6px; padding: 2px 8px; border: 1px solid var(--line); color: var(--dim); }
+  .badge.live { border-color: var(--green); color: var(--green); }
+  .step {
+    display: flex; align-items: center; gap: 8px; padding: 5px 8px;
+    border-radius: 8px; margin-bottom: 4px; border: 1px solid transparent;
+  }
+  .step .idx { color: var(--dim); font-size: 11px; width: 16px; flex: none; }
+  .step .txt { flex: 1; font-size: 13px; }
+  .step.cur { border-color: var(--blue); background: #16233c; }
+  .step.done .txt { color: var(--dim); text-decoration: line-through; }
+  .step .st { font-size: 11px; flex: none; }
+  .st.ok { color: var(--green); } .st.wait { color: var(--amber); } .st.bad { color: var(--red); }
+  .btnrow { margin-top: 10px; display: flex; gap: 8px; }
+  .btnrow button { flex: 1; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { border: 1px solid var(--line); padding: 6px 8px; text-align: center; }
+  th { color: var(--dim); font-weight: 600; font-size: 12px; }
+  td.val { font-size: 17px; font-weight: 700; color: var(--blue); }
+  .lockline { margin-top: 8px; font-size: 12px; color: var(--dim); min-height: 40px; }
+  .lockchip { display: inline-block; border-radius: 6px; padding: 1px 8px; margin: 2px 3px 2px 0; border: 1px solid; font-size: 11.5px; }
+  .chip-x { border-color: var(--red); color: var(--red); }
+  .chip-s { border-color: var(--green); color: var(--green); }
+  .chip-wait { border-color: var(--amber); color: var(--amber); animation: blink 1s infinite; }
+  @keyframes blink { 50% { opacity: .35; } }
+  .alert {
+    margin-top: 12px; border-radius: 10px; padding: 10px 14px; font-size: 13.5px;
+    border: 1px solid var(--line); background: var(--bg2); min-height: 46px;
+  }
+  .alert.bad { border-color: var(--red); background: #2a1520; color: #fca5a5; }
+  .alert.bad b.t { color: var(--red); font-size: 14.5px; display: inline-block; margin-right: 6px; }
+  .alert.ok { border-color: var(--green); color: #86efac; }
+  #log {
+    margin-top: 12px; background: #0b1220; border: 1px solid var(--line);
+    border-radius: 10px; padding: 10px 12px; height: 160px; overflow-y: auto;
+    font-size: 12.5px; font-family: Consolas, "Courier New", monospace;
+  }
+  #log p { margin: 1px 0; color: var(--dim); }
+  #log p.a { color: #60a5fa; } #log p.b { color: var(--indigo); }
+  #log p.an { color: var(--red); } #log p.sys { color: var(--green); }
+</style>
+</head>
+<body>
+<h1>双事务隔离级别游乐场 <span class="tag">—— 同一份脚本，四种级别四种结局</span></h1>
+<p class="sub">左右两个事务按脚本逐步执行，中间是共享数据表和锁状态。切换隔离级别或预设场景，看同一条脚本会不会蹦出异常徽标。</p>
+
+<div class="bar">
+  <span class="lab">预设场景</span>
+  <span class="seg" id="sceneSeg">
+    <button data-s="0" class="on">① 转账</button>
+    <button data-s="1">② 库存扣减</button>
+    <button data-s="2">③ 统计快照</button>
+  </span>
+  <span class="sep"></span>
+  <span class="lab">隔离级别</span>
+  <span class="seg" id="lvSeg">
+    <button data-l="RU">RU</button>
+    <button data-l="RC">RC</button>
+    <button data-l="RR" class="on">RR</button>
+    <button data-l="SER">Serializable</button>
+  </span>
+  <span class="sep"></span>
+  <button id="btnAuto">▶ 顺序交错执行</button>
+  <button id="btnReset">重置场景</button>
+</div>
+
+<div class="grid">
+  <div class="panel">
+    <h2>T1 <span class="badge" id="t1badge">未开始</span></h2>
+    <div id="stepsA"></div>
+    <div class="btnrow">
+      <button id="btnA">T1 执行下一步</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>共享数据 + 锁状态</h2>
+    <table id="dataTable"></table>
+    <div class="lockline" id="lockline">（无锁）</div>
+    <div class="alert" id="alert">就绪。选一个场景，两边轮流点「执行下一步」。</div>
+    <div id="log"></div>
+  </div>
+
+  <div class="panel">
+    <h2>T2 <span class="badge" id="t2badge">未开始</span></h2>
+    <div id="stepsB"></div>
+    <div class="btnrow">
+      <button id="btnB">T2 执行下一步</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---------- 场景脚本 ----------
+  // op: begin/select/update/commit  tx: 'A'|'B'  res: 资源行
+  var SCENES = [
+    {
+      name: '转账（T1 给 T2 的用户转 100）',
+      tables: { acct: [
+        { key: 'alice', bal: 500 }, { key: 'bob', bal: 300 }
+      ]},
+      A: [
+        { op: 'begin', txt: 'BEGIN' },
+        { op: 'update', res: 'alice', txt: 'UPDATE alice: bal - 100', d: -100 },
+        { op: 'update', res: 'bob', txt: 'UPDATE bob: bal + 100', d: 100 },
+        { op: 'commit', txt: 'COMMIT' }
+      ],
+      B: [
+        { op: 'begin', txt: 'BEGIN' },
+        { op: 'select', res: 'alice', txt: 'SELECT alice 余额' },
+        { op: 'select', res: 'bob', txt: 'SELECT bob 余额' },
+        { op: 'check_sum', txt: '校验：两人总额应为 800' }
+      ]
+    },
+    {
+      name: '库存扣减（丢失更新现场）',
+      tables: { stock: [ { key: 'sku_1', bal: 100 } ]},
+      A: [
+        { op: 'begin', txt: 'BEGIN' },
+        { op: 'select', res: 'sku_1', txt: 'SELECT 库存（读到 100）' },
+        { op: 'calc', txt: '业务：算出应扣 1 → 写回 99', write: 'sku_1', val: 99 },
+        { op: 'update', res: 'sku_1', txt: 'UPDATE 库存 = 99（覆盖写）', set: 99 },
+        { op: 'commit', txt: 'COMMIT' }
+      ],
+      B: [
+        { op: 'begin', txt: 'BEGIN' },
+        { op: 'select', res: 'sku_1', txt: 'SELECT 库存（也读到 100）' },
+        { op: 'calc', txt: '业务：算出应扣 1 → 写回 99', write: 'sku_1', val: 99 },
+        { op: 'update', res: 'sku_1', txt: 'UPDATE 库存 = 99（覆盖写）', set: 99 },
+        { op: 'commit', txt: 'COMMIT' },
+        { op: 'check_stock', txt: '校验：扣了两单，库存应为 98' }
+      ]
+    },
+    {
+      name: '统计快照（T2 要一个一致的分部汇总）',
+      tables: { sales: [
+        { key: '华东', bal: 30 }, { key: '华南', bal: 20 }, { key: '总计', bal: 0, calc: true }
+      ]},
+      A: [
+        { op: 'begin', txt: 'BEGIN' },
+        { op: 'update', res: '华东', txt: 'UPDATE 华东 +10（新订单）', d: 10 },
+        { op: 'wait', txt: '（事务还没提交…）' },
+        { op: 'update', res: '华南', txt: 'UPDATE 华南 +10（又一张单）', d: 10 },
+        { op: 'commit', txt: 'COMMIT' }
+      ],
+      B: [
+        { op: 'begin', txt: 'BEGIN（报表开始）' },
+        { op: 'select', res: '华东', txt: 'SELECT 华东' },
+        { op: 'select', res: '华南', txt: 'SELECT 华南' },
+        { op: 'check_snap', txt: '报表校验：两次读必须来自同一快照' }
+      ]
+    }
+  ];
+
+  // ---------- 引擎状态 ----------
+  var scene = 0, level = 'RR';
+  var S = null;
+  function freshData(sc) {
+    var t = {}, rows = {};
+    var src = SCENES[sc].tables;
+    for (var tb in src) {
+      t[tb] = [];
+      for (var i = 0; i < src[tb].length; i++) {
+        var r = { key: src[tb][i].key, bal: src[tb][i].bal, calc: !!src[tb][i].calc };
+        t[tb].push(r); rows[r.key] = r;
+      }
+    }
+    return { tables: t, rows: rows };
+  }
+  function fresh() {
+    var d = freshData(scene);
+    return {
+      base: d,                          // 基线（已提交值）
+      pend: {},                         // T1 未提交的覆盖值 res->val
+      dirty: {},                        // res -> true：此刻值含未提交改动
+      locks: {},                        // res -> {x:'A'|'B'|null, s:{A?:1,B?:1}}
+      stepA: 0, stepB: 0, doneA: false, doneB: false,
+      t1commitHappened: false,
+      rrSnapA: null, rrSnapB: null,     // RR/RU 快照：res->值
+      readLogB: [], anomaly: null, running: null, runIdx: 0
+    };
+  }
+
+  // ---------- 取值（模拟隔离级别）----------
+  function valueOf(res, who) {
+    // 自己未提交的写永远自己可见（这里只有 update 直接改 base，简化：update 走 commit 队列）
+    if (level === 'RU') {
+      // 脏读：能看见 pend
+      if (res in S.pend) return S.pend[res];
+      return S.base.rows[res].bal;
+    }
+    if (level === 'RC') {
+      // 只看已提交：pend 不可见；本步骤读取时的已提交值
+      return S.base.rows[res].bal;
+    }
+    // RR / SER：读快照
+    var snap = (who === 'A') ? S.rrSnapA : S.rrSnapB;
+    if (snap && res in snap) return snap[res];
+    return S.base.rows[res].bal;
+  }
+
+  function takeSnap(who) {
+    var snap = {};
+    for (var k in S.base.rows) if (!S.base.rows[k].calc) snap[k] = S.base.rows[k].bal;
+    if (who === 'A') { if (level === 'RR' || level === 'SER') if (!S.rrSnapA) S.rrSnapA = snap; }
+    else { if (level === 'RR' || level === 'SER') if (!S.rrSnapB) S.rrSnapB = snap; }
+  }
+
+  // ---------- 锁 ----------
+  function lockOf(res) { if (!S.locks[res]) S.locks[res] = { x: null, s: {} }; return S.locks[res]; }
+  function acquire(tx, res, mode) {
+    // SER：select 拿 S，update 拿 X，冲突就阻塞（简化：动画里谁先拿谁赢，后者显示"等待锁…"）
+    var L = lockOf(res);
+    if (mode === 'X') {
+      if (L.x || Object.keys(L.s).length) return false;
+      L.x = tx; return true;
+    }
+    if (L.x) return false;
+    L.s[tx] = 1; return true;
+  }
+  function releaseAll(tx) {
+    for (var res in S.locks) {
+      var L = S.locks[res];
+      if (L.x === tx) L.x = null;
+      delete L.s[tx];
+    }
+  }
+  function usesLocks() { return level === 'SER'; }
+
+  // ---------- 执行一步 ----------
+  function step(tx) {
+    if (S.anomaly && S.anomaly.blocking) return;
+    var sc = SCENES[scene];
+    var script = tx === 'A' ? sc.A : sc.B;
+    var i = tx === 'A' ? S.stepA : S.stepB;
+    if (i >= script.length) return;
+    var st = script[i];
+    var other = tx === 'A' ? 'B' : 'A';
+
+    if (st.op === 'begin') {
+      takeSnap(tx);                     // RR 快照在第一次"读"时拍；BEGIN 先占位，首次 select 再拍
+      log(tx + ' BEGIN（级别 ' + level + '）', tx === 'A' ? 'a' : 'b');
+      setBadge(tx, '进行中', true);
+    } else if (st.op === 'select') {
+      if ((level === 'RR' || level === 'SER') &&
+          !((tx === 'A' ? S.rrSnapA : S.rrSnapB))) takeSnap(tx);
+      if (usesLocks()) {
+        if (!acquire(tx, st.res, 'S')) {
+          markStep(tx, i, 'wait', '等待锁…');
+          log(tx + ' ' + st.txt + ' → 被 ' + other + ' 的 X 锁挡住，等待锁…', 'an');
+          setAlert('bad', '⏳ 阻塞', tx + ' 的 ' + st.txt + ' 被对方未提交的写锁挡住。Serializable 下读写互斥，T2 只能等 —— 一致性的代价就是吞吐。');
+          return;                       // 不推进步骤指针
+        }
+      }
+      var v = valueOf(st.res, tx);
+      var dirty = !!(S.pend[st.res] !== undefined && level === 'RU');
+      log(tx + ' ' + st.txt + ' → ' + v + (dirty ? ' ★脏数据（对方未提交）' : ''), tx === 'A' ? 'a' : 'b');
+      if (dirty) anomaly('脏读 Dirty Read',
+        tx + ' 读到了 ' + other + ' <b>还没 COMMIT</b> 的值 ' + v + '。只要对方一 ROLLBACK，这个值就是从未存在过的幻影。READ UNCOMMITTED 级别放任这种事 —— 生产上没人用它。');
+      if (tx === 'B') S.readLogB.push({ res: st.res, val: v, dirty: dirty });
+      rememberVal(st.res, v, tx);
+    } else if (st.op === 'calc') {
+      log(tx + ' ' + st.txt + '（内存里算的，数据库还不知道）', tx === 'A' ? 'a' : 'b');
+    } else if (st.op === 'update') {
+      var newVal = ('set' in st) ? st.set : (valueOf(st.res, tx) + st.d);
+      // 写写冲突检测（带锁级别）：对方持有该资源（S 或 X）→ 阻塞
+      if (usesLocks()) {
+        var L = lockOf(st.res);
+        var blocked = (L.x && L.x !== tx) || L.s[other];
+        if (blocked) {
+          markStep(tx, i, 'wait', '等待锁…');
+          log(tx + ' ' + st.txt + ' → 与 ' + other + ' 的锁冲突，等待锁…', 'an');
+          setAlert('bad', '⏳ 写写冲突（阻塞）', tx + ' 想写 ' + st.res + '，但 ' + other + ' 持有锁。在真数据库里这里就是 lock wait / 死锁检测的地盘（见 04 程序）。');
+          return;
+        }
+        acquire(tx, st.res, 'X');
+      } else if (S.pend[st.res] !== undefined && otherHoldingDirty(other, st.res)) {
+        // 无锁级别：第二个写者直接覆盖 —— 写 skew 的极端形态
+      }
+      // 未提交写：进 pend（RU 可见），COMMIT 才落 base
+      S.pend[st.res] = newVal;
+      S.dirty[st.res] = true;
+      log(tx + ' ' + st.txt + ' → 暂存 ' + newVal + '（未提交）', tx === 'A' ? 'a' : 'b');
+    } else if (st.op === 'wait') {
+      log(tx + ' ' + (st.txt || '（停一拍）'), tx === 'A' ? 'a' : 'b');
+    } else if (st.op === 'commit') {
+      for (var k in S.pend) { S.base.rows[k].bal = S.pend[k]; delete S.dirty[k]; }
+      S.pend = {};
+      releaseAll(tx);
+      if (tx === 'A') S.t1commitHappened = true;
+      log(tx + ' COMMIT —— 暂存值落盘', tx === 'A' ? 'a' : 'b');
+      S['done' + tx] = true;
+      setBadge(tx, '已提交', false);
+    }
+
+    S[tx === 'A' ? 'stepA' : 'stepB'] = i + 1;
+    if (S['step' + tx] >= script.length && !S['done' + tx]) {
+      S['done' + tx] = true;
+      releaseAll(tx);                  // 脚本结束 = 事务收摊，别把锁留在板上
+      setBadge(tx, '脚本结束', false);
+    }
+    render();
+  }
+  function otherHoldingDirty(other, res) { return S.dirty[res]; }
+
+  // ---------- 校验步骤（异常裁判）----------
+  // 通过钩子实现，避免把裁判逻辑撒进 step()
+  function postHook(tx, st) {
+    if (st.op === 'check_sum') {
+      var readAll = S.readLogB.some(function (r) { return r.res === 'bob'; });
+      if (!readAll) {
+        good('T2 还卡在锁上：Serializable 下读会被对方未提交的写挡住。等 T1 提交后再点一次 T2 的 SELECT，拿到的就是事务级一致快照 —— 一致性的代价是等。');
+        return;
+      }
+      var a = lastVal('alice'), b = lastVal('bob');
+      var sum = (a === undefined ? 0 : a) + (b === undefined ? 0 : b);
+      if (sum !== 800 && sum !== 0)
+        anomaly('不可重复读 / 撕裂快照 Non-repeatable Read',
+          'T2 两次 SELECT 之间 T1 提交了：alice 读到 ' + a + '（旧），bob 读到 ' + b + '（新），总额 ' + sum + ' ≠ 800。<b>RC 的每条语句一个快照</b>，跨语句的读不保证同一世界。报表/对账场景这就是事故。');
+      else
+        good('校验通过：总额 ' + sum + '。' + (level === 'RR' || level === 'SER' ? '快照钉死 / 读加锁，T1 的提交插不进来。' : '这次时序恰好没撞上 —— 换个交错顺序再试试 RC。'));
+    } else if (st.op === 'check_stock') {
+      var cur = S.base.rows['sku_1'].bal;
+      if (cur === 99)
+        anomaly('丢失更新 Lost Update',
+          '两个事务都读 100、都算 99、都写回 99 —— 扣了两单库存只减 1。<b>快照读救不了"读-改-写"</b>：RR 的快照让双方都心安理得读到 100。修法：单条 <code>UPDATE stock SET n = n - 1</code>、SELECT FOR UPDATE、或版本号 CAS（03 程序三种修法都实测过）。');
+      else
+        good('库存 = ' + cur + '，没丢。' + (level === 'SER' ? 'Serializable 下第二个 UPDATE 被锁挡住，等第一个提交后才基于新值算（动画里简化为直接放行到脚本下一步）。' : '注意：这靠的是时序运气，不是级别保证。RC/RR 下把交错改成 A读→B读→A写→B写 必丢。'));
+    } else if (st.op === 'check_snap') {
+      if (S.readLogB.length >= 2) {
+        var v1 = S.readLogB[0], v2 = S.readLogB[1];
+        var dirtyHit = (level === 'RU' && S.readLogB.some(function (r) { return r.dirty; }));
+        // 判断两次读之间是否混入了 T1 的提交效果
+        if (v1.val !== snapshotBase(v1.res) && (level === 'RC'))
+          anomaly('不可重复读 Non-repeatable Read',
+            'T2 读华东时是 ' + v1.val + '，读华南之前 T1 提交了 —— 同一份报表里华东是旧世界、华南是新世界，快照被"撕"开了。RC 下跨语句读不保证一致，报表要么上 RR，要么 <code>START TRANSACTION READ ONLY</code> 拿事务级快照。');
+        else
+          good('两次读数来自' + (level === 'RU' ? '各自现取的世界（脏：' + (dirtyHit ? '含未提交值' : '暂无未提交') + '）' : '同一个快照') + '：华东 ' + v1.val + '、华南 ' + v2.val + '。');
+      }
+    }
+    render();
+  }
+  function snapshotBase(res) { return S.base.rows[res].bal; }
+  var lastVals = {};
+  function rememberVal(res, v, tx) { lastVals[tx + ':' + res] = v; }
+  function lastVal(res) {
+    return lastVals['B:' + res] !== undefined ? lastVals['B:' + res] : S.base.rows[res].bal;
+  }
+
+  // ---------- 异常/提示 ----------
+  function anomaly(title, body) {
+    S.anomaly = { title: title, blocking: false };
+    setAlert('bad', '🚨 ' + title, body);
+    log('★ 异常发生：' + title, 'an');
+  }
+  function good(msg) {
+    if (S.anomaly) { log('（' + S.anomaly.title + ' 已经发生过，上面的红牌不算冤枉）', 'an'); return; }
+    setAlert('ok', '✔', msg);
+  }
+  function setAlert(cls, title, body) {
+    var el = $('alert');
+    el.className = 'alert ' + cls;
+    el.innerHTML = '<b class="t">' + title + '</b>' + body;
+  }
+
+  // ---------- 渲染 ----------
+  function $(id) { return document.getElementById(id); }
+  function log(m, cls) {
+    var p = document.createElement('p');
+    p.className = cls || '';
+    p.textContent = m;
+    var box = $('log'); box.appendChild(p); box.scrollTop = box.scrollHeight;
+  }
+  function setBadge(tx, txt, live) {
+    var el = $('t' + (tx === 'A' ? '1' : '2') + 'badge');
+    el.textContent = txt;
+    el.className = 'badge' + (live ? ' live' : '');
+  }
+  function markStep(tx, i, st, txt) {
+    S['mark' + tx] = S['mark' + tx] || {};
+    S['mark' + tx][i] = txt;
+    render();
+  }
+  function renderSteps(tx) {
+    var sc = SCENES[scene], script = tx === 'A' ? sc.A : sc.B;
+    var cur = tx === 'A' ? S.stepA : S.stepB;
+    var host = $('steps' + tx), html = '';
+    for (var i = 0; i < script.length; i++) {
+      var cls = 'step' + (i < cur ? ' done' : (i === cur ? ' cur' : ''));
+      var stTxt = '', stCls = '';
+      var mk = S['mark' + tx] && S['mark' + tx][i];
+      if (mk) { stTxt = mk; stCls = 'wait'; }
+      else if (i < cur) { stTxt = '✔'; stCls = 'ok'; }
+      html += '<div class="' + cls + '"><span class="idx">' + (i + 1) +
+              '</span><span class="txt">' + script[i].txt + '</span><span class="st ' + stCls + '">' + stTxt + '</span></div>';
+    }
+    host.innerHTML = html;
+    var btn = $(tx === 'A' ? 'btnA' : 'btnB');
+    btn.disabled = cur >= script.length;
+    btn.textContent = cur >= script.length ? '脚本已执行完' : 'T' + (tx === 'A' ? '1' : '2') + ' 执行下一步';
+  }
+  function render() {
+    // 数据表
+    var sc = SCENES[scene], tbName = Object.keys(sc.tables)[0];
+    var rows = S.base.tables[tbName];
+    var html = '<tr><th>' + tbName + '.key</th><th>bal（当前视角）</th><th>状态</th></tr>';
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i], v = r.bal, mark = '';
+      if (S.pend[r.key] !== undefined) { v = S.pend[r.key]; mark = '<span style="color:var(--amber)">未提交</span>'; }
+      else mark = '<span style="color:var(--dim)">已提交</span>';
+      if (r.calc) {
+        var sum = 0, found = false;
+        for (var k in S.base.rows) if (!S.base.rows[k].calc) {
+          found = true;
+          sum += (S.pend[k] !== undefined ? S.pend[k] : S.base.rows[k].bal);
+        }
+        if (found) v = sum;
+      }
+      html += '<tr><td>' + r.key + '</td><td class="val">' + v + '</td><td>' + mark + '</td></tr>';
+    }
+    $('dataTable').innerHTML = html;
+
+    // 锁状态
+    var lh = '';
+    for (var res in S.locks) {
+      var L = S.locks[res];
+      if (L.x) lh += '<span class="lockchip chip-x">' + res + ' ← T' + (L.x === 'A' ? '1' : '2') + ' 持 X</span>';
+      for (var t in L.s) lh += '<span class="lockchip chip-s">' + res + ' ← T' + (t === 'A' ? '1' : '2') + ' 持 S</span>';
+    }
+    var waiting = false;
+    if (S.markA) for (var m in S.markA) if (S.markA[m] === '等待锁…') waiting = true;
+    if (S.markB) for (var m2 in S.markB) if (S.markB[m2] === '等待锁…') waiting = true;
+    if (waiting) lh += '<span class="lockchip chip-wait">⏳ 有事务在等待锁…</span>';
+    $('lockline').innerHTML = lh || '（无锁）';
+
+    renderSteps('A'); renderSteps('B');
+  }
+
+  // ---------- 单步（含裁判钩子）----------
+  function doStep(tx) {
+    var sc = SCENES[scene];
+    var script = tx === 'A' ? sc.A : sc.B;
+    var i = tx === 'A' ? S.stepA : S.stepB;
+    var st = script[i];
+    if (!st) return;
+    step(tx);
+    if (S[(tx === 'A' ? 'stepA' : 'stepB')] > i && st.op.indexOf('check') === 0) postHook(tx, st);
+  }
+
+  // ---------- 自动交错 ----------
+  // 每个字母 = 对应事务执行下一步。交错顺序是挑好的：专挑最容易蹦异常的节奏。
+  var INTERLEAVE = {
+    0: ['A', 'B', 'A', 'B', 'A', 'A', 'B', 'B'],
+    1: ['A', 'B', 'A', 'B', 'A', 'B', 'A', 'B', 'A', 'B', 'B'],
+    2: ['B', 'A', 'A', 'B', 'A', 'A', 'A', 'B', 'B']
+  };
+  function autoRun() {
+    var plan = INTERLEAVE[scene];
+    if (S.runIdx >= plan.length) { S.running = null; $('btnAuto').textContent = '▶ 顺序交错执行'; return; }
+    doStep(plan[S.runIdx++]);
+    if (S.runIdx < plan.length) S.running = setTimeout(autoRun, 950);
+    else { S.running = null; $('btnAuto').textContent = '▶ 顺序交错执行'; }
+  }
+  function toggleAuto() {
+    if (S.running) { clearTimeout(S.running); S.running = null; $('btnAuto').textContent = '▶ 顺序交错执行'; return; }
+    $('btnAuto').textContent = '■ 停止';
+    S.running = setTimeout(autoRun, 200);
+  }
+
+  // ---------- 场景/级别切换 ----------
+  function loadScene() {
+    if (S && S.running) clearTimeout(S.running);
+    S = fresh();
+    lastVals = {};
+    $('log').innerHTML = '';
+    $('alert').className = 'alert';
+    $('alert').innerHTML = '场景：' + SCENES[scene].name + '。级别 <b>' + level + '</b>。点两边的「执行下一步」，或直接「顺序交错执行」。';
+    setBadge('A', '未开始', false); setBadge('B', '未开始', false);
+    log('载入场景：' + SCENES[scene].name + '（级别 ' + level + '）', 'sys');
+    render();
+  }
+  function bindSeg(hostId, attr, cb) {
+    var host = $(hostId);
+    host.addEventListener('click', function (e) {
+      var b = e.target.closest('button');
+      if (!b) return;
+      var btns = host.querySelectorAll('button');
+      for (var i = 0; i < btns.length; i++) btns[i].className = '';
+      b.className = 'on';
+      cb(b.getAttribute(attr));
+    });
+  }
+  bindSeg('sceneSeg', 'data-s', function (v) { scene = parseInt(v, 10); loadScene(); });
+  bindSeg('lvSeg', 'data-l', function (v) { level = v; loadScene(); });
+
+  $('btnA').onclick = function () { if (S.running) return; doStep('A'); };
+  $('btnB').onclick = function () { if (S.running) return; doStep('B'); };
+  $('btnAuto').onclick = toggleAuto;
+  $('btnReset').onclick = loadScene;
+
+  loadScene();
+})();
+</script>
+</body>
+</html>

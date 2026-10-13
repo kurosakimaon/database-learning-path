@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第 2 关 · 炼气期：存储与索引 — 数据库学习路线</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface-2: #334155;
+    --ink: #f1f5f9;
+    --ink-muted: #94a3b8;
+    --ink-dim: #64748b;
+    --rule: #334155;
+    --accent: #38bdf8;
+    --accent-2: #818cf8;
+    --ok: #4ade80;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --mono: "Consolas", "Cascadia Mono", "Courier New", ui-monospace, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                 "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.7;
+    font-size: 14px;
+    padding: 34px 20px 70px;
+  }
+  .container { max-width: 1120px; margin: 0 auto; }
+
+  .header { text-align: center; margin-bottom: 30px; }
+  .header .stage {
+    display: inline-block;
+    font-size: 12px;
+    letter-spacing: .12em;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    padding: 3px 14px;
+    margin-bottom: 14px;
+  }
+  .header h1 {
+    font-size: 2rem;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 10px;
+  }
+  .header p { color: var(--ink-muted); font-size: 14px; max-width: 760px; margin: 0 auto; }
+  .header code { font-family: var(--mono); color: var(--accent); }
+
+  .thesis {
+    max-width: 760px; margin: 18px auto 0;
+    background: rgba(56,189,248,.07);
+    border: 1px solid var(--accent);
+    border-radius: 12px;
+    padding: 14px 20px;
+    font-size: 14.5px;
+    color: var(--ink);
+  }
+  .thesis b { color: var(--accent); }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 14px;
+    padding: 22px 26px;
+    margin-bottom: 22px;
+  }
+  .panel h2 {
+    font-size: 16px;
+    color: var(--accent);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .panel p { color: var(--ink-muted); font-size: 13.5px; }
+  .panel code { font-family: var(--mono); color: var(--accent); }
+  .panel b { color: var(--ink); }
+
+  .why { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 12px; }
+  .why > div {
+    background: rgba(56,189,248,.06);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--accent-2);
+    border-radius: 9px;
+    padding: 12px 14px;
+    font-size: 13px;
+    color: var(--ink-muted);
+  }
+  .why b { color: var(--ink); display: block; margin-bottom: 4px; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin: 18px 0 8px; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 14px;
+    padding: 20px;
+    text-decoration: none;
+    color: inherit;
+    display: block;
+    position: relative;
+    overflow: hidden;
+    transition: transform .18s, border-color .18s, box-shadow .18s;
+  }
+  .card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  }
+  .card:hover {
+    transform: translateY(-4px);
+    border-color: var(--accent);
+    box-shadow: 0 12px 32px rgba(2, 6, 23, .6);
+  }
+  .card .no {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-dim);
+    margin-bottom: 6px;
+  }
+  .card .title { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+  .card .title code { font-family: var(--mono); color: var(--accent); font-size: 15px; }
+  .card .desc { font-size: 12.5px; color: var(--ink-muted); line-height: 1.65; min-height: 60px; }
+  .card .tags { margin-top: 12px; display: flex; gap: 7px; flex-wrap: wrap; }
+  .tag {
+    font-size: 10.5px;
+    padding: 2px 9px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    color: var(--ink-muted);
+  }
+  .tag.star { background: rgba(56,189,248,.16); color: var(--accent); }
+  .tag.tool { background: rgba(129,140,248,.16); color: var(--accent-2); }
+  .tag.live { background: rgba(74,222,128,.14); color: var(--ok); }
+
+  .order { counter-reset: st; margin-top: 10px; }
+  .order li {
+    list-style: none;
+    counter-increment: st;
+    padding: 10px 0 10px 46px;
+    position: relative;
+    border-bottom: 1px dashed var(--rule);
+    color: var(--ink-muted);
+    font-size: 13.5px;
+  }
+  .order li:last-child { border-bottom: none; }
+  .order li::before {
+    content: counter(st);
+    position: absolute; left: 6px; top: 10px;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #0b1220;
+    font-weight: 700;
+    font-size: 13px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .order code { font-family: var(--mono); color: var(--accent); }
+  .order b { color: var(--ink); }
+
+  pre.cmd {
+    background: #0b1220;
+    border: 1px solid var(--rule);
+    border-radius: 9px;
+    padding: 13px 16px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.85;
+    overflow-x: auto;
+    margin-top: 10px;
+  }
+  pre.cmd .c { color: var(--ink-dim); }
+  pre.cmd .k { color: var(--accent); }
+  pre.cmd .w { color: var(--warn); }
+  .note {
+    margin-top: 12px; padding: 10px 14px;
+    border-left: 3px solid var(--warn);
+    background: rgba(251,191,36,.07);
+    border-radius: 0 8px 8px 0;
+    font-size: 12.5px;
+    color: var(--ink-muted);
+  }
+  .note b { color: var(--warn); }
+
+  .ledger { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 12px; }
+  .ledger > div {
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-size: 13px;
+    color: var(--ink-muted);
+    background: rgba(15,23,42,.5);
+  }
+  .ledger b { display: block; margin-bottom: 6px; font-size: 14px; }
+  .ledger .cpu b { color: var(--accent-2); }
+  .ledger .io b { color: var(--accent); }
+  .ledger .big { font-family: var(--mono); font-size: 18px; color: var(--ink); }
+  @media (max-width: 720px) { .ledger { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="stage">数据库学习路线 · 第 2 关</div>
+    <h1>炼气期 · 存储与索引</h1>
+    <p>
+      给会 C++ 的你：页就是一块定长的 <code>mmap</code> 区域，
+      Buffer Pool 就是带淘汰策略的对象池，B+ 树节点就是定长结构体里塞
+      key 数组 + 孩子<em>页号</em>——把 <code>vector</code> 下标存进文件，
+      你就已经懂了一半存储引擎。
+    </p>
+    <div class="thesis">
+      ◆ 本关唯一要刻进脑子的一句话：<b>数据库的一切设计，都源于"磁盘按页读写、
+      内存断电即失"这对矛盾。</b>Buffer Pool 对抗慢，WAL 对抗断电，
+      B+ 树对抗"按页读写"——没有一样发明是凭空来的。
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>🧭 先算两本账，再谈数据结构</h2>
+    <p>
+      这一关看任何方案，都先分两个本记账。<b>只看比较次数，你会得出
+      "要 B+ 树干嘛"的错误结论；账本一换，结论立刻翻转。</b>
+    </p>
+    <div class="ledger">
+      <div class="cpu">
+        <b>CPU 的账：比较次数</b>
+        一次比较约 1ns，十亿次才一秒。<br>
+        红黑树点查 ≈ <span class="big">18</span> 次比较，看着真漂亮——
+      </div>
+      <div class="io">
+        <b>磁盘的账：页读取次数</b>
+        一次随机 I/O ≈ 100μs = <span class="big">十万次</span>比较。<br>
+        同样这棵树散在磁盘上就是 18 次随机 I/O；
+        B+ 树树高 4，只要 <span class="big">4</span> 页。账本一换，高下立判。
+      </div>
+    </div>
+    <div class="why">
+      <div><b>扇出决定树高</b>一个节点 = 一页 = 101 个分叉；log₁₀₁(100万) ≈ 3。红黑树节点挂着数据，扇出被拖死。</div>
+      <div><b>偏移不是指针</b>页里存"到页心的偏移"。内存地址是临时工，页号+偏移才是户口本——01 里亲手体会。</div>
+      <div><b>省了读，欠了写</b>Buffer Pool 挡住 20 次读，就可能欠 1 次脏页写回。写放大、checkpoint 全从这笔账长出来。</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>📁 文件卡片（7 个，全部离线可用）</h2>
+    <div class="cards">
+      <a class="card" href="tutorial.md">
+        <div class="no">MAP · 先读这个</div>
+        <div class="title"><code>tutorial.md</code></div>
+        <div class="desc">老师傅的带教手册：核心命题、三道坎（两本账 / 分裂三规则 / 最左前缀）、8 个必踩的坑、3 道课后练习。开工前通读一遍。</div>
+        <div class="tags"><span class="tag">地图</span><span class="tag">纯文本</span></div>
+      </a>
+      <a class="card" href="01_disk_and_page.cpp">
+        <div class="no">STEP 01 · 地基</div>
+        <div class="title"><code>01_disk_and_page.cpp</code></div>
+        <div class="desc">手写三件套：4096 字节槽式页（变长记录 + 页内偏移）、Pager（seekg/seekp 整页读写）、Buffer Pool（LRU + 脏页写回 + pin）。盯输出里"命中率爬到 80%"和"淘汰页 #2（脏页，写回磁盘）"。</div>
+        <div class="tags"><span class="tag star">★ C++ 单文件</span><span class="tag live">g++ 直接编译</span></div>
+      </a>
+      <a class="card" href="02_btree_vs_sorted_array.cpp">
+        <div class="no">STEP 02 · 心脏</div>
+        <div class="title"><code>02_btree_vs_sorted_array.cpp</code></div>
+        <div class="desc">100 万 int 四方案大对决：线性扫 / 二分 / 手写 B+ 树 / 红黑树，比较次数与页读取分栏记账。实测树高 4、14610 页、范围查询比逐个点查省 266 倍页读——这屏数字就是本关的灵魂。</div>
+        <div class="tags"><span class="tag star">★ 本关心脏</span><span class="tag live">g++ 直接编译</span></div>
+      </a>
+      <a class="card" href="03_index_in_practice.sql">
+        <div class="no">STEP 03 · 落地</div>
+        <div class="title"><code>03_index_in_practice.sql</code></div>
+        <div class="desc">真 SQLite 上的 22 处 EXPLAIN QUERY PLAN（真实输出已注释在旁）：SCAN → SEARCH、聚簇 vs 二级回表、覆盖索引、最左前缀、五种失效写法。20 万行数据 WITH RECURSIVE 现场造。</div>
+        <div class="tags"><span class="tag star">★ 实测验证</span><span class="tag live">sqlite3 可直接跑</span></div>
+      </a>
+      <a class="card" href="btree_animator.html">
+        <div class="no">TOOL · 最重要的教具</div>
+        <div class="title"><code>btree_animator.html</code></div>
+        <div class="desc">阶 4 的 B+ 树插入动画：插入 / 随机 / 自动连插 12 个 / 撤销 / 重置。右侧实时显示比较次数、页读取次数、树高；分裂、复制上提 vs 上提不留、根分裂长高，一帧一帧放慢看。</div>
+        <div class="tags"><span class="tag tool">交互动画</span><span class="tag">双击即开</span></div>
+      </a>
+      <a class="card" href="bufferpool_animator.html">
+        <div class="no">TOOL · 命中率模拟器</div>
+        <div class="title"><code>bufferpool_animator.html</code></div>
+        <div class="desc">8 帧池 + 20 页磁盘：手动访问 / 自动序列 / 制造缓存污染。LRU 与 Clock 双算法 tab 切换，命中率并排对比；脏页被踢前"帧 ──写回──▶ 磁盘"的箭头，就是写放大的第一课。</div>
+        <div class="tags"><span class="tag tool">交互动画</span><span class="tag">双击即开</span></div>
+      </a>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>🪜 建议的学习顺序</h2>
+    <ol class="order">
+      <li><b>通读 <code>tutorial.md</code></b>——先接受那句核心命题，带着"谁是被逼出来的"这个问题往下看。</li>
+      <li><b>跑 <code>01_disk_and_page.cpp</code></b>——先造页，再造 Pager，最后造 Buffer Pool。看命中率怎么爬上去、脏页怎么写回。</li>
+      <li><b>边玩 <code>btree_animator.html</code> 边读 <code>02_btree_vs_sorted_array.cpp</code></b>——动画里看清分裂规则（叶子复制上提、内部上提不留），再去 02 看阶 101 的真树怎么长成 4 层。</li>
+      <li><b>跑 <code>03_index_in_practice.sql</code></b>——每条 EXPLAIN 先猜再看注释；把"SCAN 还是 SEARCH"练成本能。</li>
+      <li><b>玩 <code>bufferpool_animator.html</code></b>——同一条序列 LRU、Clock 各跑一遍，比较命中率；点「制造缓存污染」看热页死亡回放。</li>
+      <li><b>做 tutorial.md 末尾的三道练习</b>——砍扇出重跑 02、纸上画阶 4 插入、当 EXPLAIN 预言家。做完这一关才算通关。</li>
+    </ol>
+  </div>
+
+  <div class="panel">
+    <h2>⌨️ 跑起来的命令（PowerShell）</h2>
+    <pre class="cmd">
+<span class="c"># C++ 示例：单文件，无需任何依赖（g++ 15 已验证）</span>
+<span class="k">g++</span> -std=c++17 -O2 01_disk_and_page.cpp -o 01.exe ; .\01.exe
+<span class="k">g++</span> -std=c++17 -O2 02_btree_vs_sorted_array.cpp -o 02.exe ; .\02.exe
+
+<span class="c"># SQL 实验：内存库直接跑，退出码 0 = 零报错（sqlite3 3.51 已验证）</span>
+<span class="k">sqlite3</span> :memory: ".read 03_index_in_practice.sql"
+
+<span class="c"># 两个动画：文件管理器里双击 .html 即可，零外部依赖、断网可用</span>
+<span class="w"># 跑完记得清理：01.exe / 02.exe / 01 生成的 demo.db</span></pre>
+    <div class="note">
+      <b>提示：</b>02 要生成一棵 100 万 key 的真 B+ 树，跑满约十几秒，别急。
+      01 会在当前目录生成 <code>demo.db</code> 并在演示完自动删除；
+      若中途 Ctrl+C 留下残留文件，手动删掉即可。编译出的 .exe 也记得清。
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

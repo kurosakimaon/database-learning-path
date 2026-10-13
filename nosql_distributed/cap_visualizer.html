@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CAP 分区可视化 · 第 6 关</title>
+<style>
+  :root {
+    --bg: #0f172a; --bg2: #1e293b; --line: #334155;
+    --ink: #e2e8f0; --dim: #94a3b8;
+    --blue: #38bdf8; --indigo: #818cf8; --green: #34d399;
+    --amber: #fbbf24; --red: #f87171;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 14px/1.6 "Segoe UI", "Microsoft YaHei", sans-serif;
+    min-height: 100vh; padding: 20px 24px 40px;
+  }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  h1 .tag { color: var(--blue); }
+  .sub { color: var(--dim); font-size: 13px; margin-bottom: 16px; }
+  .bar {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    background: var(--bg2); border: 1px solid var(--line);
+    border-radius: 10px; padding: 10px 12px; margin-bottom: 16px;
+  }
+  button {
+    background: #0b1220; color: var(--ink); border: 1px solid var(--line);
+    border-radius: 8px; padding: 7px 12px; cursor: pointer; font-size: 13px;
+    transition: all .15s;
+  }
+  button:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }
+  button:disabled { opacity: .35; cursor: not-allowed; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button { border: none; border-radius: 0; }
+  .seg button.on { background: var(--blue); color: #06121f; font-weight: 600; }
+  .lab { color: var(--dim); font-size: 12px; }
+  .sep { width: 1px; height: 26px; background: var(--line); margin: 0 4px; }
+  input#val {
+    background: #0b1220; border: 1px solid var(--line); border-radius: 8px;
+    color: var(--ink); padding: 7px 10px; font-size: 13px; width: 170px;
+  }
+  input#val:focus { outline: none; border-color: var(--blue); }
+  .cols { display: grid; grid-template-columns: 640px 1fr; gap: 16px; }
+  @media (max-width: 1080px) { .cols { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--bg2); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .panel h2 { font-size: 14px; color: var(--blue); margin-bottom: 10px; }
+  #topo svg { width: 100%; height: auto; display: block; }
+  #clocks {
+    background: #0b1220; border: 1px dashed var(--indigo); border-radius: 10px;
+    padding: 8px 12px; font-size: 12.5px; color: var(--dim);
+    font-family: Consolas, "Courier New", monospace; min-height: 60px;
+  }
+  #clocks p { margin: 2px 0; }
+  #clocks .vc { color: var(--indigo); }
+  #clocks .green { color: var(--green); }
+  #clocks .amber { color: var(--amber); }
+  #log {
+    background: #0b1220; border: 1px solid var(--line);
+    border-radius: 10px; padding: 10px 12px; height: 470px; overflow-y: auto;
+    font-size: 12.5px; font-family: Consolas, "Courier New", monospace;
+  }
+  #log p { margin: 1px 0; }
+  #log p.ok { color: var(--green); }
+  #log p.err { color: var(--red); }
+  #log p.warn { color: var(--amber); }
+  #log p.sys { color: var(--blue); }
+  #log p.dim { color: var(--dim); }
+  .explain {
+    margin-top: 14px; border-left: 3px solid var(--amber); padding: 6px 10px;
+    background: #1a2236; border-radius: 0 8px 8px 0; font-size: 13px; color: #fde68a;
+    min-height: 34px;
+  }
+  .foot { margin-top: 14px; color: var(--dim); font-size: 13px; line-height: 1.9; }
+  .foot b { color: var(--ink); }
+  .foot .mono { font-family: Consolas, "Courier New", monospace; color: var(--indigo); }
+</style>
+</head>
+<body>
+<h1>CAP 分区可视化 <span class="tag">—— 断网那一刻，CP 拒写保账本，AP 照写、回头对账</span></h1>
+<p class="sub">玩法：先照常写两笔 → 点「⚡切断网络」→ 让老王（连着 A）和老李（连着 B）各写各的 → 恢复网络 → 反熵同步看两边账本怎么对撞 → 向量时钟合并收尾。CP 和 AP 不是挑字母，是挑「分区（P）真来那一刻，你愿意当面吃下哪一种事故」。</p>
+
+<div class="bar">
+  <span class="lab">选道</span>
+  <span class="seg">
+    <button id="btnCP" class="on">CP · 一致性优先</button>
+    <button id="btnAP">AP · 可用性优先</button>
+  </span>
+  <span class="sep"></span>
+  <button id="btnPart">⚡ 切断网络（分区）</button>
+  <span class="sep"></span>
+  <input id="val" placeholder="新值（留空自动 draft-*）">
+  <button id="btnWA">老王 → A 写 X</button>
+  <button id="btnLB">老李 → B 写 X</button>
+  <button id="btnRead">📖 读三节点 X</button>
+  <span class="sep"></span>
+  <button id="btnSync">反熵同步</button>
+  <button id="btnMerge" disabled>⚔️ 合并冲突</button>
+  <button id="btnReset">重置</button>
+</div>
+
+<div class="cols">
+  <div>
+    <div class="panel">
+      <h2>集群拓扑（节点框 = 本地 X 值 + 向量时钟 vc）</h2>
+      <div id="topo"></div>
+    </div>
+    <div class="panel" style="margin-top:14px">
+      <h2>时钟对账本（最近一次反熵的逐分量比较）</h2>
+      <div id="clocks"></div>
+    </div>
+    <div class="explain" id="explain"></div>
+  </div>
+  <div class="panel">
+    <h2>读写落点 & 返回值（每一次操作都记在这里）</h2>
+    <div id="log"></div>
+    <div class="foot">
+      <b>向量时钟三条家规</b>：<br>
+      ① 每个副本只给自己的计数器 +1，本地写一次涨一格；<br>
+      ② 同步时带上自己的时钟；并发就逐分量取 max 当新时钟；<br>
+      ③ 若 a ≥ b（每个分量都 ≥、至少一个 >）⇒ a 发生在 b 之后 ⇒ 旧值被拦截、新值直接覆盖；<br>
+      互相谁也不压住谁 ⇒ 并发写 ⇒ 兄弟版本并存，等一个合并函数收场。<br>
+      <b>真实世界里的选型</b>：etcd / ZooKeeper / MySQL 半同步主从走 CP（分区拒写）；Dynamo / Cassandra 走 AP（先写后对账）。
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* ============================================================
+ * 老师傅笔记：这个动画把「分区」这一维加进 03_concurrency_cpp.cpp
+ * 演示二的故事里。那边是真线程 + 慢复制复现 read-your-writes 违背；
+ * 这里把同一件事画在图上：断网 → 各写各的 → 恢复 → 向量时钟对账。
+ * 演示三里「旧值被版本号拦下」的桥段，在这里的反熵同步里会再来一遍。
+ * ============================================================ */
+
+var NODES = ['A', 'B', 'C'];
+var LEADER = 'B';           // CP 模式的常驻 leader（演示简化：不搞选举过程）
+var S = null;               // 全局状态
+var LASTSYNC = null;        // 最近一次反熵的比较记录
+
+function freshVc() { return { A: 0, B: 0, C: 0 }; }
+function freshState() {
+  return {
+    mode: 'CP', part: false, seq: 0,
+    n: {
+      A: { vc: freshVc(), vals: ['v0'], dirty: false },
+      B: { vc: freshVc(), vals: ['v0'], dirty: false },
+      C: { vc: freshVc(), vals: ['v0'], dirty: false }
+    }
+  };
+}
+function clone(v) { return JSON.parse(JSON.stringify(v)); }
+function side(k) { return (S.part && k === 'A') ? 0 : 1; }   // 0 = 少数派孤岛，1 = 多数派侧
+function eqVc(a, b) { return a.A === b.A && a.B === b.B && a.C === b.C; }
+function dominates(a, b) {           // a 严格压住 b：a 的因果链包含 b 的全部历史
+  return a.A >= b.A && a.B >= b.B && a.C >= b.C &&
+         (a.A > b.A || a.B > b.B || a.C > b.C);
+}
+function maxVc(a, b) {
+  return { A: Math.max(a.A, b.A), B: Math.max(a.B, b.B), C: Math.max(a.C, b.C) };
+}
+function fmtVc(v) { return '{A:' + v.A + ' · B:' + v.B + ' · C:' + v.C + '}'; }
+function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function $(id) { return document.getElementById(id); }
+
+function log(cls, txt) {
+  var el = $('log');
+  var p = document.createElement('p');
+  p.className = cls;
+  p.textContent = txt;
+  el.appendChild(p);
+  el.scrollTop = el.scrollHeight;
+}
+function explain(html) { $('explain').innerHTML = html; }
+
+/* ---------- 向量时钟核心：apply ---------- */
+/* 把一条外来记录 (vc, vals) 落到节点 k 上：
+   来者时钟压住本地 → 旧值被拦截、直接覆盖（03 演示三的老桥段）；
+   本地压住来者 → 那是条迟到的旧消息，丢弃；
+   互相压不住 → 并发写，兄弟版本并存，节点亮黄灯等合并。      */
+function applyTo(k, incoming) {
+  var n = S.n[k];
+  if (dominates(incoming.vc, n.vc)) { n.vc = clone(incoming.vc); n.vals = incoming.vals.slice(); n.dirty = false; return 'adopt'; }
+  if (dominates(n.vc, incoming.vc)) { return 'stale'; }
+  if (eqVc(n.vc, incoming.vc)) { return 'same'; }
+  incoming.vals.forEach(function (v) { if (n.vals.indexOf(v) < 0) n.vals.push(v); });
+  n.vc = maxVc(n.vc, incoming.vc);
+  n.dirty = true;
+  return 'conflict';
+}
+
+/* ---------- 写路径 ---------- */
+function nextVal(client) {
+  var v = $('val').value.trim();
+  if (v) { $('val').value = ''; return v; }
+  S.seq++;
+  return (client === '王' ? 'draft-A' : 'draft-B') + S.seq;
+}
+function doWrite(client, nodeKey) {
+  var value = nextVal(client);
+  if (S.mode === 'CP') {
+    if (S.part && side(nodeKey) === 0) {
+      log('err', '❌ ' + client + ' → A 写 X="' + value + '" ⇒ 【拒绝写入】');
+      log('err', '　　原因：A 在少数派侧（这边只有 1/3 个节点，凑 quorum 要 2/3）。');
+      log('err', '　　Raft 提交日志要多数派确认；A 想联系 leader B 转发，超时。');
+      log('err', '　　宁可不可用，也不能让两边各记各的账 —— C 赢了，A 输了。');
+      explain('少数派在 <b>拒写</b>：没有多数派就选不出 leader、提交不了日志。CP 守的是「永远不让两个副本各拿一个版本」——要分叉，宁可停机。');
+      render();
+      return;
+    }
+    if (S.part) {
+      var inc = { vc: clone(S.n.B.vc), vals: [value] };
+      inc.vc.B++;
+      applyTo('B', { vc: clone(inc.vc), vals: [value] });
+      applyTo('C', { vc: clone(inc.vc), vals: [value] });
+      log('ok', '✅ ' + client + ' → B 写 X="' + value + '" ⇒ leader B + 多数派(B,C) 提交 ⇒ B、C 已同步');
+      log('dim', '　　分区对面的 A 收不到，还停在 "' + S.n.A.vals.join(' / ') + '" @ ' + fmtVc(S.n.A.vc) + ' —— 恢复后要么被覆盖、要么撞成冲突，看时钟');
+      explain('多数派侧照常写，这本身就是 CP 的代价分配：<b>能凑齐多数派的一侧继续服务，凑不齐的那侧直接拒写</b>。客户端老王此刻只能吃错误。');
+    } else {
+      var inc2 = { vc: clone(S.n.B.vc), vals: [value] };
+      inc2.vc.B++;
+      NODES.forEach(function (k) { applyTo(k, { vc: clone(inc2.vc), vals: [value] }); });
+      log('ok', '✅ ' + client + ' → ' + nodeKey + ' 写 X="' + value + '" ⇒ 转给 leader B ⇒ 多数派提交 ⇒ 三节点同步应用 @ ' + fmtVc(inc2.vc));
+      explain('无分区时 CP 也照常工作：从哪个节点进都要<b>转发给 leader、凑齐多数派日志确认</b>才返回成功 —— 比直写本地慢一个来回，换的是「返回成功 = 全账本一致」。');
+    }
+  } else {
+    var inc3 = { vc: clone(S.n[nodeKey].vc), vals: [value] };
+    inc3.vc[nodeKey]++;
+    applyTo(nodeKey, inc3);
+    log('ok', '✅ ' + client + ' → ' + nodeKey + ' 写 X="' + value + '" ⇒ AP 选了可用性：本地落盘立刻返回 @ ' + fmtVc(inc3.vc));
+    var peers = NODES.filter(function (k) { return k !== nodeKey && side(k) === side(nodeKey); });
+    peers.forEach(function (k) {
+      applyTo(k, { vc: clone(inc3.vc), vals: [value] });
+      log('dim', '　　异步复制 ' + nodeKey + ' → ' + k + '（同侧可达，送达）');
+    });
+    if (S.part) log('warn', '　　分区对面的节点送不到，复制欠账记在墙上 —— 这就是「最终一致」里那句「最终」的代价');
+    explain('AP 的账是这么算的：<b>先答应客户，账本分叉回头再对</b>。分区期间两边各写各的，向量时钟会诚实地把这段并发历史记下来。');
+  }
+  afterOp();
+}
+
+/* ---------- 读路径 ---------- */
+function readAll() {
+  var outs = NODES.map(function (k) { return S.n[k].vals.join(' / '); });
+  NODES.forEach(function (k) {
+    var n = S.n[k];
+    log('dim', '📖 读 X@' + k + ' ⇒ "' + n.vals.join(' / ') + '" @ ' + fmtVc(n.vc) + (n.dirty ? '  ⚔️冲突待并' : ''));
+  });
+  if (outs[0] === outs[1] && outs[1] === outs[2]) {
+    log('ok', '　　三副本返回值一致');
+  } else {
+    log('warn', '⚠️ 三个副本返回值不同 —— 问到哪个副本看到哪张脸，这就是「弱一致性」现场');
+  }
+  afterOp();
+}
+
+/* ---------- 分区 / 恢复 ---------- */
+function togglePart() {
+  if (S.part) {
+    S.part = false;
+    log('sys', '🔌 网络恢复 —— 但两边的账本已经各自走远了，值不会自己合拢');
+    explain('网络通了，<b>数据还没通</b>：点「反熵同步」，让节点两两交换向量时钟 —— 新吞旧直接覆盖；并发写则 ⚔️ 兄弟版本并存。');
+  } else {
+    S.part = true;
+    log('sys', '⚡ 分区：A ｜ B C —— 两边各跟自家人通电话，对面彻底失联');
+    explain(S.mode === 'CP'
+      ? 'CP 模式下的分区：<b>少数派 A 凑不齐多数派，写入直接拒</b>（宁可停）；多数派 B、C 侧照常提交。'
+      : 'AP 模式下的分区：<b>两边都继续接写</b>，各记各的账 —— ⚔️ 分叉先记账，回头再对，别慌。');
+  }
+  afterOp();
+}
+
+/* ---------- 反熵同步 ---------- */
+function exchange(x, y, first) {
+  var nx = S.n[x], ny = S.n[y];
+  if (S.part && side(x) !== side(y)) { log('warn', '　　' + x + ' ⇢ ' + y + '：超时（跨分区，不可达）'); return; }
+  var vx = clone(nx.vc), vy = clone(ny.vc);
+  if (dominates(vx, vy)) {
+    var oldY = clone(ny.vals);
+    ny.vc = clone(vx); ny.vals = nx.vals.slice(); ny.dirty = false;
+    if (first) {
+      log('dim', '　　' + x + ' ⇄ ' + y + '：' + fmtVc(vx) + ' 支配 ' + fmtVc(vy) + ' ⇒ ' + y + ' 的旧账本被整体覆盖');
+      LASTSYNC = { x: x, y: y, vx: vx, vy: vy, valsX: clone(nx.vals), valsY: oldY, merged: clone(vx),
+        verdict: fmtVc(vx) + ' 逐分量 ≥ ' + fmtVc(vy) + ' 且至少一格更大 ⇒ ' + x + ' 包含 ' + y + ' 的全部历史 ⇒ ' + y + ' 是旧账，被整体覆盖（03 演示三的旧值拦截，换个马甲又来了）' };
+    }
+  } else if (dominates(vy, vx)) {
+    if (first) {
+      log('dim', '　　' + x + ' ⇄ ' + y + '：' + fmtVc(vy) + ' 支配 ' + fmtVc(vx) + ' ⇒ ' + x + ' 拿旧账，被新账本覆盖');
+      LASTSYNC = { x: x, y: y, vx: vx, vy: vy, valsX: clone(nx.vals), valsY: clone(ny.vals), merged: clone(vy),
+        verdict: fmtVc(vy) + ' 逐分量 ≥ ' + fmtVc(vx) + ' 且至少一格更大 ⇒ ' + y + ' 包含 ' + x + ' 的全部历史 ⇒ ' + x + ' 是旧账，被整体覆盖（03 演示三的旧值拦截，换个马甲又来了）' };
+    }
+    nx.vc = clone(vy); nx.vals = ny.vals.slice(); nx.dirty = false;
+  } else if (eqVc(vx, vy)) {
+    if (first) log('dim', '　　' + x + ' ⇄ ' + y + '：时钟相同 ⇒ 账本已同步');
+  } else {
+    var merged = maxVc(vx, vy);
+    ny.vals = ny.vals.concat(nx.vals.filter(function (v) { return ny.vals.indexOf(v) < 0; }));
+    ny.vc = merged; ny.dirty = true;
+    nx.vals = nx.vals.concat(ny.vals.filter(function (v) { return nx.vals.indexOf(v) < 0; }));
+    nx.vc = clone(merged); nx.dirty = true;
+    if (first) {
+      log('warn', '　　' + x + ' ⇄ ' + y + '：' + fmtVc(vx) + ' vs ' + fmtVc(vy) + ' ⇒ 互不支配 ⇒ ⚔️ 并发写，兄弟版本并存');
+      LASTSYNC = {
+        x: x, y: y, vx: vx, vy: vy,
+        valsX: clone(nx.vals), valsY: clone(ny.vals), merged: merged,
+        verdict: '两本时钟互相都压不住对方（各有对方没有的那一笔）⇒ 这是并发写，不是谁迟到 —— 旧值拦截不适用，只能并存等合并'
+      };
+    }
+  }
+}
+function syncAll() {
+  log('sys', '🔄 反熵同步开始：A⇄B、A⇄C、B⇄C 两两交换（真实系统里靠 gossip + Merkle 树省流量）');
+  exchange('A', 'B', true);
+  exchange('A', 'C', false);
+  exchange('B', 'C', false);
+  var anyDirty = NODES.some(function (k) { return S.n[k].dirty; });
+  if (anyDirty) {
+    log('warn', '⚔️ 对账结束：存在兄弟版本 —— 机器不敢替你决定丢哪笔账，等人工/业务函数合并');
+    explain('这就是 03 演示二里「两边各写各的」在恢复后的现场：<b>向量时钟判定为并发</b> ⇒ 谁也不是谁的后来者 ⇒ 值并存（Dynamo 里的 siblings），由合并函数或人工收场。');
+  } else {
+    log('ok', '✅ 对账结束：所有迟到的旧消息被时钟拦截，三副本账本一致');
+    explain('这条路径对应 03 演示三：<b>一侧没写过</b> ⇒ 另一侧的时钟逐分量 ≥ 它 ⇒ 「我包含你的全部历史」⇒ 旧值被拦、新值直接覆盖，不算冲突。');
+  }
+  renderClocks();
+  afterOp();
+}
+
+/* ---------- 冲突合并 ---------- */
+function merge() {
+  var uniq = [];
+  NODES.forEach(function (k) {
+    S.n[k].vals.forEach(function (v) { if (uniq.indexOf(v) < 0) uniq.push(v); });
+  });
+  var mergedVal = uniq.join(' + ');
+  var base = freshVc();
+  NODES.forEach(function (k) { base = maxVc(base, S.n[k].vc); });
+  var nvc = clone(base); nvc[LEADER]++;
+  NODES.forEach(function (k) { applyTo(k, { vc: clone(nvc), vals: [mergedVal] }); });
+  LASTSYNC = {
+    x: '合并', y: '全体广播', vx: base, vy: nvc,
+    valsX: uniq, valsY: [mergedVal], merged: nvc,
+    verdict: '合并时钟逐分量取 max 再 +1 ⇒ 严格支配两边所有兄弟版本的时钟 ⇒ 广播出去，全体采纳，siblings 收场'
+  };
+  log('ok', '⚔️→✅ 手动合并：「' + mergedVal + '」以时钟 ' + fmtVc(nvc) + ' 广播 ⇒ 支配双方所有时钟 ⇒ 全体采纳，冲突清除');
+  explain('合并是 <b>AP 路线的后半段</b>：可用性赚到的每一次「两边都写成功」，都会在这里变成一次「谁来当合并函数」。Dynamo 用 last-writer-wins / 因果时钟 / CRDT  counters，业务各选各的。');
+  renderClocks();
+  afterOp();
+}
+
+/* ---------- 模式 / 重置 ---------- */
+function switchMode(m) {
+  if (S.part) log('warn', 'ℹ️ 分区中换模式 = 飞行途中换发动机，仅演示用');
+  S.mode = m;
+  log('sys', '🛠 模式 → ' + m + '：' + (m === 'CP'
+    ? '分区时少数派拒写（ZooKeeper / etcd / InnoDB 半同步主从的路子）'
+    : '分区时两边照写，恢复后对账（Dynamo / Cassandra 的路子）'));
+  explain(m === 'CP'
+    ? 'CP：<b>一致性 > 可用性</b>。分区是少数事件，宁可让它发生时停一侧，也不让分叉进账本。'
+    : 'AP：<b>可用性 > 强一致</b>。业务靠向量时钟 + 冲突并存 + 合并函数，把「一致」推迟到「最终」。');
+  afterOp();
+}
+function reset() {
+  var mode = S.mode;
+  S = freshState(); S.mode = mode; LASTSYNC = null;
+  log('sys', '🧹 重置：三节点回到 "v0"，向量时钟归零，分区消失');
+  explain('默认 CP 模式。先照常写两笔找感觉，再点「⚡切断网络」——好戏在断网那一刻才开始。');
+  renderClocks();
+  afterOp();
+}
+
+/* ---------- 渲染 ---------- */
+function clientBox(name, x) {
+  return '<rect x="' + x + '" y="40" width="130" height="40" rx="8" fill="#1e293b" stroke="#38bdf8"/>' +
+         '<text x="' + (x + 65) + '" y="65" font-size="13" fill="#38bdf8" text-anchor="middle">' + name + '</text>';
+}
+var POS = { A: 60, B: 460, C: 460 };
+function nodeBox(k) {
+  var n = S.n[k], x = POS[k];
+  var y = (k === 'C') ? 290 : 150;
+  var stroke = n.dirty ? '#fbbf24' : '#334155';
+  var out = '<rect x="' + x + '" y="' + y + '" width="180" height="106" rx="12" fill="#0b1220" stroke="' + stroke + '" stroke-width="2"/>';
+  var role = '';
+  if (S.mode === 'CP' && k === LEADER) role = ' <tspan fill="#fbbf24">👑leader</tspan>';
+  if (S.part) role += (k === 'A') ? ' <tspan fill="#f87171">孤岛</tspan>' : ' <tspan fill="#34d399">多数派</tspan>';
+  out += '<text x="' + (x + 12) + '" y="' + (y + 26) + '" font-size="14" fill="#e2e8f0" font-weight="700">节点 ' + k + role + '</text>';
+  if (n.vals.length === 1) {
+    out += '<text x="' + (x + 12) + '" y="' + (y + 50) + '" font-size="13" fill="#34d399">X = "' + esc(n.vals[0]) + '"</text>';
+  } else {
+    out += '<text x="' + (x + 12) + '" y="' + (y + 50) + '" font-size="12" fill="#fbbf24">⚔️ X ∈ [' + n.vals.map(esc).join(', ') + ']</text>';
+  }
+  out += '<text x="' + (x + 12) + '" y="' + (y + 74) + '" font-size="12" fill="#818cf8">vc ' + fmtVc(n.vc) + '</text>';
+  out += '<text x="' + (x + 12) + '" y="' + (y + 94) + '" font-size="11" fill="#94a3b8">' + (n.dirty ? '兄弟版本并存 → 待合并' : '单一版本') + '</text>';
+  return out;
+}
+function lineStyle(broken) {
+  return broken ? 'stroke="#f87171" stroke-dasharray="6 6"' : 'stroke="#475569"';
+}
+function render() {
+  var cut = S.part
+    ? '<line x1="318" y1="14" x2="318" y2="392" stroke="#f87171" stroke-width="2" stroke-dasharray="7 5"/>' +
+      '<text x="326" y="30" font-size="12" fill="#f87171">⚡分区</text>'
+    : '';
+  var html = '<svg viewBox="0 0 700 410">' +
+    clientBox('老王（客户端）', 75) +
+    clientBox('老李（客户端）', 485) +
+    '<line x1="140" y1="80" x2="140" y2="146" stroke="#475569"/>' +
+    '<line x1="550" y1="80" x2="550" y2="146" stroke="#475569"/>' +
+    '<line x1="242" y1="185" x2="458" y2="185" ' + lineStyle(S.part) + '/>' +
+    '<line x1="242" y1="225" x2="458" y2="330" ' + lineStyle(S.part) + '/>' +
+    '<line x1="550" y1="258" x2="550" y2="288" stroke="#34d399"/>' +
+    nodeBox('A') + nodeBox('B') + nodeBox('C') +
+    cut +
+    '</svg>';
+  $('topo').innerHTML = html;
+}
+function renderClocks() {
+  if (!LASTSYNC) {
+    $('clocks').innerHTML = '<span class="dim">还没发生过后一场逐时钟比较 —— 分区、两边各写、恢复、反熵同步，比较过程会摆在这里。</span>';
+    return;
+  }
+  var t = LASTSYNC;
+  var cls = t.verdict.indexOf('⚔') >= 0 ? 'amber' : 'green';
+  $('clocks').innerHTML =
+    '<p>' + esc(t.x) + ' ⇄ ' + esc(t.y) + '</p>' +
+    '<p class="vc">' + esc(t.x) + '：' + fmtVc(t.vx) + ' ⇒ [' + t.valsX.map(esc).join(', ') + ']</p>' +
+    '<p class="vc">' + esc(t.y) + '：' + fmtVc(t.vy) + ' ⇒ [' + t.valsY.map(esc).join(', ') + ']</p>' +
+    '<p class="' + cls + '">判定：' + esc(t.verdict) + '</p>' +
+    '<p class="vc">合并后时钟：' + fmtVc(t.merged) + '</p>';
+}
+function refresh() {
+  $('btnCP').className = (S.mode === 'CP') ? 'on' : '';
+  $('btnAP').className = (S.mode === 'AP') ? 'on' : '';
+  $('btnPart').textContent = S.part ? '🔌 恢复网络' : '⚡ 切断网络（分区）';
+  var anyDirty = NODES.some(function (k) { return S.n[k].dirty; });
+  $('btnMerge').disabled = !anyDirty;
+}
+function afterOp() { render(); renderClocks(); refresh(); }
+
+/* ---------- 启动 ---------- */
+$('btnCP').onclick = function () { switchMode('CP'); };
+$('btnAP').onclick = function () { switchMode('AP'); };
+$('btnPart').onclick = togglePart;
+$('btnWA').onclick = function () { doWrite('王', 'A'); };
+$('btnLB').onclick = function () { doWrite('李', 'B'); };
+$('btnRead').onclick = readAll;
+$('btnSync').onclick = syncAll;
+$('btnMerge').onclick = merge;
+$('btnReset').onclick = reset;
+
+S = freshState();
+log('sys', '👋 集群就绪：A、B、C 三节点，X="v0"，时钟全零。当前 CP 模式，leader 是 B。');
+explain('默认 CP 模式。先照常写两笔找感觉（从 A 写也会转给 leader B 凑多数派），再点「⚡切断网络」——好戏在断网那一刻才开始。');
+render(); renderClocks(); refresh();
+</script>
+</body>
+</html>

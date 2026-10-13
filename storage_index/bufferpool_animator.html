@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Buffer Pool 动画 · LRU vs Clock</title>
+<style>
+  :root{
+    --bg:#0f172a; --bg2:#0b1220; --panel:#111c33; --line:#1e293b;
+    --cy:#38bdf8; --vi:#818cf8; --tx:#e2e8f0; --mu:#94a3b8;
+    --hot:#fbbf24; --ok:#34d399; --bad:#fb7185;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--tx);
+       font:14px/1.65 "Segoe UI","Microsoft YaHei",Consolas,monospace;}
+  header{padding:18px 24px 10px;border-bottom:1px solid var(--line);background:var(--bg2)}
+  h1{margin:0 0 4px;font-size:19px;color:var(--cy)}
+  h1 small{color:var(--mu);font-weight:400;font-size:13px;margin-left:10px}
+  .sub{color:var(--mu);font-size:12.5px}
+  .wrap{display:flex;gap:14px;padding:14px 18px;align-items:flex-start;flex-wrap:wrap}
+  .stage{flex:1 1 660px;min-width:560px;background:var(--bg2);
+         border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .side{flex:0 0 320px;display:flex;flex-direction:column;gap:12px}
+  .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+       padding:12px;border-bottom:1px solid var(--line);background:#0d1729}
+  input[type=number]{width:78px;padding:7px 9px;background:#0b1220;color:var(--tx);
+       border:1px solid #24344f;border-radius:6px;font-family:inherit;font-size:14px}
+  input[type=number]:focus{outline:none;border-color:var(--cy)}
+  button{padding:7px 13px;background:#16233c;color:var(--tx);border:1px solid #2b3d5e;
+         border-radius:6px;cursor:pointer;font-family:inherit;font-size:13px;
+         transition:transform .12s ease,background .15s ease,border-color .15s ease}
+  button:hover{background:#1d2e4d;border-color:var(--cy)}
+  button:active{transform:translateY(1px) scale(.98)}
+  button.primary{background:#0c3a52;border-color:var(--cy);color:#cfefff}
+  .tabs{display:flex;gap:0;border:1px solid #2b3d5e;border-radius:6px;overflow:hidden}
+  .tabs button{border:none;border-radius:0;background:#0b1220}
+  .tabs button.on{background:#0c3a52;color:#cfefff;box-shadow:inset 0 -2px 0 var(--cy)}
+  .board{padding:14px 16px}
+  .cap{font-size:12px;color:var(--mu);margin:0 0 8px;letter-spacing:.5px}
+  .frames{display:grid;grid-template-columns:repeat(8,1fr);gap:8px;margin-bottom:6px}
+  .fr{background:#0d1a2e;border:1.5px solid #22334f;border-radius:8px;
+      min-height:96px;padding:6px 4px;text-align:center;position:relative;
+      transition:transform .25s ease,border-color .25s ease,background .25s ease}
+  .fr .idx{position:absolute;top:3px;left:5px;font-size:10px;color:#475569}
+  .fr .pid{font-size:20px;font-weight:600;color:var(--cy);margin-top:14px;font-variant-numeric:tabular-nums}
+  .fr.empty .pid{color:#334155;font-size:13px;font-weight:400;margin-top:20px}
+  .fr .dirty{display:block;font-size:10px;color:var(--hot);height:14px}
+  .fr .ref{display:block;font-size:10px;color:var(--vi);height:14px}
+  .fr.hit{border-color:var(--ok);background:#0c2b23;transform:translateY(-4px)}
+  .fr.victim{border-color:var(--bad);background:#2b1220}
+  .fr.incoming{border-color:var(--cy);background:#0c2b3a;transform:translateY(-4px)}
+  .fr.hand{box-shadow:0 0 0 2px var(--vi) inset}
+  .fr.ghost{color:#475569}
+  .order{display:flex;gap:4px;flex-wrap:wrap;margin:2px 0 16px;min-height:22px}
+  .order span{font-size:11px;background:#122240;border:1px solid #26406b;color:#93c5fd;
+              border-radius:4px;padding:1px 7px}
+  .disk{display:grid;grid-template-columns:repeat(12,1fr);gap:6px}
+  .pg{background:#0b1220;border:1.3px solid #22334f;border-radius:6px;text-align:center;
+      padding:7px 0;font-size:12.5px;color:#64748b;transition:all .25s ease;position:relative}
+  .pg.loaded{border-color:var(--cy);color:#7dd3fc;background:#0c2233}
+  .pg.copied{border-color:var(--hot);color:var(--hot);background:#2a2008}
+  .pg b{display:block;font-size:13px;font-variant-numeric:tabular-nums}
+  .pg i{font-style:normal;font-size:9.5px;color:var(--hot)}
+  .arrow{margin:12px 0;text-align:center;font-size:12px;color:var(--mu);min-height:20px}
+  .arrow em{font-style:normal;color:var(--hot)}
+  .arrow s{text-decoration:none;color:var(--ok)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .card h3{margin:0 0 8px;font-size:13px;color:var(--vi);letter-spacing:.5px}
+  .stat{display:flex;justify-content:space-between;align-items:baseline;padding:5px 0;
+        border-bottom:1px dashed #1c2a44}
+  .stat:last-child{border-bottom:none}
+  .stat b{font-size:22px;color:var(--cy);font-variant-numeric:tabular-nums}
+  .stat.v b{color:var(--vi)} .stat.w b{color:var(--hot)}
+  .stat i{font-style:normal;color:var(--mu);font-size:12px}
+  #say{min-height:88px;font-size:13px;color:#dbe7f8}
+  #say em{font-style:normal;color:var(--hot)}
+  #say s{text-decoration:none;color:var(--ok)}
+  .seq{display:flex;gap:3px;flex-wrap:wrap;margin-top:6px}
+  .seq span{font-size:11px;background:#122240;border:1px solid #26406b;color:#93c5fd;
+            border-radius:4px;padding:1px 6px;cursor:pointer}
+  .seq span.done{background:#0c2b23;border-color:var(--ok);color:#6ee7b7}
+  .seq span.cur{background:#2a2008;border-color:var(--hot);color:var(--hot)}
+  .legend{font-size:11.5px;color:var(--mu);padding:8px 12px;border-top:1px solid var(--line)}
+  .k{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 4px 0 10px;vertical-align:middle}
+</style>
+</head>
+<body>
+<header>
+  <h1>Buffer Pool 动画 <small>池子 8 帧 · 磁盘 20 页 · LRU 与 Clock（二次机会）对照</small></h1>
+  <div class="sub">
+    上一课算过账：一次随机页读约 100&mu;s，一次内存比较约 1ns。
+    所以数据库真正的性能指标不是"有没有索引"，而是<em>命中率</em>。
+    这个动画让你亲手把命中率打下来，再看 Clock 是怎么替你兜住的。
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="stage">
+    <div class="bar">
+      <span class="tabs">
+        <button id="tabLRU" class="on">LRU</button>
+        <button id="tabCLK">Clock（二次机会）</button>
+      </span>
+      <input type="number" id="inp" value="3" min="1" max="20">
+      <button class="primary" id="btnAcc">访问页 N</button>
+      <button id="btnAuto">播放自动序列</button>
+      <button id="btnScan">制造缓存污染（全表扫描）</button>
+      <button id="btnReset">重置</button>
+    </div>
+
+    <div class="board">
+      <div class="cap" id="capPool">内存 Buffer Pool —— 8 帧（左 = 最近用过，右 = 最久没碰）</div>
+      <div class="frames" id="pool"></div>
+      <div class="order" id="order"></div>
+
+      <div class="arrow" id="arrow"></div>
+
+      <div class="cap">磁盘数据文件 —— 20 页。<span style="color:var(--hot)">●</span> = 磁盘上的版本已经旧了？
+        不，这里 <span style="color:var(--hot)">●</span> 表示"这一页刚被写回"。内存里改过但没写回的，看帧上的 D。</div>
+      <div class="disk" id="disk"></div>
+    </div>
+
+    <div class="legend">
+      <span class="k" style="background:#34d399"></span>命中（页已经在池里）
+      <span class="k" style="background:#fb7185"></span>被淘汰的牺牲者
+      <span class="k" style="background:#38bdf8"></span>刚从磁盘装进来
+      <span class="k" style="background:#818cf8"></span>Clock 指针当前位置
+      &nbsp;|&nbsp; D = dirty（脏页） R = 引用位
+    </div>
+  </div>
+
+  <div class="side">
+    <div class="card">
+      <h3>当前算法：<span id="algoName" style="color:var(--cy)">LRU</span></h3>
+      <div class="stat"><span>访问次数</span><b id="sReq">0</b><i>次</i></div>
+      <div class="stat"><span>命中</span><b id="sHit">0</b><i>次</i></div>
+      <div class="stat v"><span>命中率</span><b id="sRate">-</b><i></i></div>
+      <div class="stat"><span>缺页（读盘）</span><b id="sMiss">0</b><i>次</i></div>
+      <div class="stat"><span>淘汰</span><b id="sEvic">0</b><i>次</i></div>
+      <div class="stat w"><span>脏页写回</span><b id="sWb">0</b><i>次</i></div>
+    </div>
+    <div class="card">
+      <h3>两个算法并排比</h3>
+      <div class="stat"><span>LRU 命中率</span><b id="cLRU">-</b><i>淘汰 <span id="cLRUe">0</span></i></div>
+      <div class="stat v"><span>Clock 命中率</span><b id="cCLK">-</b><i>淘汰 <span id="cCLKe">0</span></i></div>
+      <div style="font-size:12px;color:var(--mu);margin-top:8px">
+        两套统计各记各的。想公平比较：重置 → 播自动序列（LRU）→ 切 Clock → 重置 → 播同一条序列。
+      </div>
+    </div>
+    <div class="card">
+      <h3>解说</h3>
+      <div id="say">点「播放自动序列」。前 12 次是热点访问，命中率会飙上去；后半段是冷数据，看谁被踢出去。</div>
+    </div>
+    <div class="card">
+      <h3>自动序列</h3>
+      <div class="seq" id="seqView"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+// ================================================================
+//  Buffer Pool 模拟器
+//    帧结构：{pid, dirty, ref}
+//    LRU  ：命中就把该帧移到队首；缺页时踢队尾（O(1)，真实实现是双向链表 + hash）
+//    Clock：每帧一个引用位 + 一根环形指针。命中置 1；缺页时指针往前走，
+//           遇到 ref=1 就清 0 放行（"再给你一次机会"），遇到 ref=0 就踢。
+//           —— 这就是 InnoDB midpoint-insertion 之前的通用做法，代价比 LRU 低：
+//              命中时不用改链表，只要一个位。高并发下链表就是战场。
+//    淘汰脏页必须先写回磁盘；干净页直接丢。这一条是"写放大"的源头之一。
+// ================================================================
+var FRAMES = 8, DISK_PAGES = 20;
+var HOT_SEQ  = [3, 7, 3, 9, 7, 3, 12, 9, 7, 3, 12, 7];
+var COLD_SEQ = [1, 2, 4, 5, 6, 8, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20];
+var SCAN_SEQ = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 3, 7, 9, 12];
+var FULL_SEQ = HOT_SEQ.concat(COLD_SEQ).concat(HOT_SEQ);
+
+var algo = "LRU";
+var pool, orderList, hand, stats, diskDirty, playing = false, timer = null;
+
+function freshState() {
+  pool = [];
+  for (var i = 0; i < FRAMES; i++) pool.push({ pid: -1, dirty: false, ref: 0 });
+  orderList = [];                 // LRU 专用：帧下标，队首最新
+  hand = 0;                       // Clock 指针
+  stats = { req: 0, hit: 0, miss: 0, evic: 0, wb: 0 };
+  diskDirty = {};                 // pid -> 磁盘版本是旧的（内存改了没落盘）
+}
+
+// ---------------- 选牺牲者 ----------------
+function pickVictimLRU() {
+  for (var i = 0; i < orderList.length; i++) {           // 从最久没碰的那端找
+    var f = orderList[orderList.length - 1 - i];
+    if (f !== undefined) return f;
+  }
+  return FRAMES - 1;
+}
+function pickVictimClock() {
+  var scanned = 0;
+  while (scanned < FRAMES * 3) {
+    var f = pool[hand];
+    if (f.pid < 0) { var free = hand; hand = (hand + 1) % FRAMES; return { v: free, gave: scanned }; }
+    if (f.ref === 1) { f.ref = 0; hand = (hand + 1) % FRAMES; scanned++; continue; }
+    var v = hand; hand = (hand + 1) % FRAMES;
+    return { v: v, gave: scanned };
+  }
+  return { v: hand, gave: scanned };
+}
+
+// ---------------- 一次访问 = 一串动画步骤 ----------------
+function access(pid, makeDirty) {
+  var steps = [];
+  function snap(o) {
+    steps.push({ pool: JSON.parse(JSON.stringify(pool)), order: orderList.slice(),
+                 hand: hand, stats: JSON.parse(JSON.stringify(stats)),
+                 diskDirty: JSON.parse(JSON.stringify(diskDirty)), say: o.say || "",
+                 hi: o.hi || {}, fly: o.fly || null });
+  }
+  stats.req++;
+  var slot = -1;
+  for (var i = 0; i < FRAMES; i++) if (pool[i].pid === pid) { slot = i; break; }
+
+  if (slot >= 0) {                                  // ---- 命中 ----
+    stats.hit++;
+    pool[slot].ref = 1;
+    if (algo === "LRU") {
+      orderList = orderList.filter(function (x) { return x !== slot; });
+      orderList.unshift(slot);
+    }
+    if (makeDirty) { pool[slot].dirty = true; diskDirty[pid] = true; }
+    snap({ hi: { hit: slot },
+           say: "<s>命中</s>：页 " + pid + " 已经在帧 " + slot + "。" +
+                (algo === "LRU"
+                  ? "把它提到 LRU 队首 —— 注意这一步在真实引擎里要<b>改链表，要拿 latch</b>，" +
+                    "热点页的链表是并发争用的重灾区。"
+                  : "把引用位置 1，<b>不用动任何链表</b> —— 这就是 Clock 存在的首要理由。") });
+    if (makeDirty)
+      snap({ hi: { hit: slot }, say: "顺手改了页 " + pid + " → 帧上亮起 <em>D</em>：" +
+                "内存里的版本比磁盘新，磁盘上还是老数据。断电就没了。" });
+    return steps;
+  }
+
+  // ---- 缺页 ----
+  stats.miss++;
+  var freeSlot = -1;
+  for (var j = 0; j < FRAMES; j++) if (pool[j].pid < 0) { freeSlot = j; break; }
+
+  if (freeSlot >= 0) {
+    pool[freeSlot] = { pid: pid, dirty: false, ref: 1 };
+    if (algo === "LRU") orderList.unshift(freeSlot);
+    if (makeDirty) { pool[freeSlot].dirty = true; diskDirty[pid] = true; }
+    snap({ hi: { inSlot: freeSlot }, fly: { from: pid, to: freeSlot },
+           say: "缺页。池里还有空帧 " + freeSlot + "，直接把页 " + pid + " 读进来 —— " +
+                "<em>1 次磁盘读</em>。空帧用完之前，淘汰是不会发生的。" });
+    return steps;
+  }
+
+  // 池满：选牺牲者
+  var vi, gave = 0, startHand = hand;
+  if (algo === "LRU") { vi = pickVictimLRU(); }
+  else { var r = pickVictimClock(); vi = r.v; gave = r.gave; }
+  var victimPid = pool[vi].pid;
+
+  if (algo === "LRU") {
+    snap({ hi: { victim: vi },
+           say: "池满（" + FRAMES + " 帧全占）。LRU 从队尾取出页 <b>" + victimPid +
+                "</b> 当牺牲者 —— 它最久没被碰过。" });
+  } else {
+    snap({ hi: { victim: vi, hand: vi },
+           say: "池满。Clock 指针从帧 " + startHand + " 起走，扫了 <b>" + (gave + 1) +
+                "</b> 帧（途中把引用位 1 的清成 0，等于又给了它们一次机会），" +
+                "停在第一个 ref=0 的帧 " + vi + "（页 <b>" + victimPid + "</b>）—— 踢它。" });
+  }
+
+  var wasDirty = pool[vi].dirty;
+  if (wasDirty) {                                    // 脏页必须先写回
+    stats.wb++;
+    diskDirty[victimPid] = false;
+    snap({ hi: { victim: vi, wb: victimPid },
+           fly: { from: vi, to: victimPid, out: true },
+           say: "页 " + victimPid + " 是<em>脏页</em>，必须<b>先写回磁盘</b>才能被覆盖 —— " +
+                "不然这份修改就永久丢了。多出来的是 <em>1 次磁盘写</em>。" +
+                "这就是 Buffer Pool 的账：省了读，欠了写。" });
+    pool[vi].dirty = false;
+  } else {
+    stats.evic++;
+    snap({ hi: { victim: vi },
+           say: "页 " + victimPid + " 是干净页（内存和磁盘一模一样），<s>直接丢掉</s>，一次 I/O 都不花。" +
+                "所以「淘汰次数」本身不贵，<b>淘汰脏页</b>才贵。" });
+  }
+  stats.evic++;
+
+  pool[vi] = { pid: pid, dirty: false, ref: 1 };
+  if (algo === "LRU") { orderList = orderList.filter(function (x) { return x !== vi; }); orderList.unshift(vi); }
+  if (makeDirty) { pool[vi].dirty = true; diskDirty[pid] = true; }
+  snap({ hi: { inSlot: vi }, fly: { from: pid, to: vi },
+         say: "把页 " + pid + " 装进帧 " + vi + " —— <em>1 次磁盘读</em>。" +
+              "这一次访问总共产生了 " + (wasDirty ? "2" : "1") +
+              " 次磁盘 I/O。命中率现在是 <b>" + rate() + "</b>。" });
+  return steps;
+}
+function rate() { return stats.req ? (100 * stats.hit / stats.req).toFixed(1) + "%" : "-"; }
+
+// ---------------- 渲染 ----------------
+function draw(st) {
+  var poolEl = document.getElementById("pool"), html = "";
+  for (var i = 0; i < FRAMES; i++) {
+    var f = st.pool[i];
+    var cls = "fr" + (f.pid < 0 ? " empty" : "");
+    if (st.hi.hit === i) cls += " hit";
+    if (st.hi.victim === i) cls += " victim";
+    if (st.hi.inSlot === i) cls += " incoming";
+    if (algo === "Clock" && st.hand === i) cls += " hand";
+    html += '<div class="' + cls + '"><span class="idx">帧' + i + '</span>' +
+            '<div class="pid">' + (f.pid < 0 ? "空" : "P" + f.pid) + '</div>' +
+            '<span class="dirty">' + (f.dirty ? "D 脏" : "") + '</span>' +
+            '<span class="ref">' + (algo === "Clock" ? (f.pid < 0 ? "" : "R=" + f.ref) : "") + '</span></div>';
+  }
+  poolEl.innerHTML = html;
+
+  var orEl = document.getElementById("order"), oh = "";
+  if (algo === "LRU") {
+    for (var k = 0; k < st.order.length; k++) {
+      var fx = st.order[k], p2 = st.pool[fx];
+      if (p2 && p2.pid >= 0) oh += '<span>' + (k === 0 ? "最新 " : (k === st.order.length - 1 ? "最旧 " : "")) + "P" + p2.pid + '</span>';
+    }
+  } else {
+    oh = '<span style="background:#1b1740;border-color:#818cf8">Clock 指针 → 帧 ' + st.hand +
+         '（环形扫描，ref=1 免死一次）</span>';
+  }
+  orEl.innerHTML = oh;
+  document.getElementById("capPool").textContent =
+    algo === "LRU"
+      ? "内存 Buffer Pool —— 8 帧（下方按 LRU 新旧排序：左新右旧，踢右边）"
+      : "内存 Buffer Pool —— 8 帧（帧序固定，Clock 指针绕圈决定踢谁）";
+
+  var dEl = document.getElementById("disk"), dh = "";
+  for (var p = 1; p <= DISK_PAGES; p++) {
+    var inPool = false;
+    for (var q = 0; q < FRAMES; q++) if (st.pool[q].pid === p) inPool = true;
+    var cls = "pg" + (st.hi.wb === p ? " copied" : (inPool ? " loaded" : " ghost"));
+    dh += '<div class="' + cls + '"><b>P' + p + '</b>' +
+          (st.diskDirty[p] ? '<i>● 待写回</i>' : (st.hi.wb === p ? '<i>● 刚写回</i>' : '&nbsp;')) + '</div>';
+  }
+  dEl.innerHTML = dh;
+
+  document.getElementById("arrow").innerHTML = st.fly
+    ? (st.fly.out
+        ? '<em>帧 ' + st.fly.from + " ──── 写回 ────▶ 磁盘 P" + st.fly.to + "</em>"
+        : '<s>磁盘 P' + st.fly.from + " ──── 读入 ────▶ 帧 " + st.fly.to + "</s>")
+    : "&nbsp;";
+  document.getElementById("say").innerHTML = st.say || "&nbsp;";
+
+  var s = st.stats;
+  document.getElementById("sReq").textContent = s.req;
+  document.getElementById("sHit").textContent = s.hit;
+  document.getElementById("sMiss").textContent = s.miss;
+  document.getElementById("sEvic").textContent = s.evic;
+  document.getElementById("sWb").textContent = s.wb;
+  document.getElementById("sRate").textContent = s.req ? (100 * s.hit / s.req).toFixed(1) : "-";
+  saveCompare();
+}
+
+function saveCompare() {
+  var key = "bp_" + algo;
+  try { sessionStorage.setItem(key, JSON.stringify(stats)); } catch (e) {}
+  var a = null, b = null;
+  try { a = JSON.parse(sessionStorage.getItem("bp_LRU") || "null");
+        b = JSON.parse(sessionStorage.getItem("bp_CLK") || "null"); } catch (e) {}
+  function fmt(x) { return x && x.req ? (100 * x.hit / x.req).toFixed(1) : "-"; }
+  document.getElementById("cLRU").textContent = fmt(a);
+  document.getElementById("cLRUe").textContent = a ? a.evic : 0;
+  document.getElementById("cCLK").textContent = fmt(b);
+  document.getElementById("cCLKe").textContent = b ? b.evic : 0;
+}
+
+// ---------------- 播放 ----------------
+function play(steps) {
+  if (timer) clearInterval(timer);
+  if (!steps.length) return;
+  playing = true;
+  var sp = 700;
+  var i = 0;
+  draw(steps[0]); i = 1;
+  timer = setInterval(function () {
+    if (i >= steps.length) { clearInterval(timer); timer = null; playing = false; nextJob(); return; }
+    draw(steps[i]); i++;
+  }, sp);
+}
+var queue = [];
+function nextJob() { if (!queue.length) return; var j = queue.shift(); runJob(j); }
+function runJob(j) {
+  markSeq(j.n, j.seq);
+  play(access(j.n, j.dirty));
+}
+var curSeq = null, seqDone = {};
+function markSeq(n, seq) {
+  curSeq = seq || curSeq;
+  var el = document.getElementById("seqView"), h = "";
+  for (var i = 0; i < curSeq.length; i++)
+    h += '<span class="' + (i === curSeq.length - 1 ? "cur" : "done") + '">' + curSeq[i] + '</span>';
+  el.innerHTML = h;
+}
+
+document.getElementById("btnAcc").onclick = function () {
+  var v = parseInt(document.getElementById("inp").value, 10);
+  if (!(v >= 1 && v <= DISK_PAGES)) { document.getElementById("say").innerHTML = "页号请输入 1~" + DISK_PAGES; return; }
+  var dirty = Math.random() < 0.35;               // 三成概率这一页要被改脏，制造写回
+  runJob({ n: v, dirty: dirty, seq: (curSeq || []).concat([v]) });
+};
+document.getElementById("btnAuto").onclick = function () {
+  queue = []; curSeq = FULL_SEQ.slice();
+  for (var i = 0; i < FULL_SEQ.length; i++) queue.push({ n: FULL_SEQ[i], dirty: (i % 5 === 2), seq: null });
+  play([]); document.getElementById("say").innerHTML =
+    "播放完整序列：" + HOT_SEQ.length + " 次热点访问 → " + COLD_SEQ.length +
+    " 次冷数据（模拟大表扫描）→ 再回到热点。<b>盯着命中率怎么被后半段砸下去。</b>";
+  nextJob();
+};
+document.getElementById("btnScan").onclick = function () {
+  queue = []; curSeq = SCAN_SEQ.slice();
+  for (var i = 0; i < SCAN_SEQ.length; i++) queue.push({ n: SCAN_SEQ[i], dirty: false, seq: null });
+  log("开始全表扫描"); nextJob();
+};
+document.getElementById("btnReset").onclick = function () {
+  if (timer) { clearInterval(timer); timer = null; }
+  queue = []; playing = false; curSeq = null;
+  freshState();
+  draw({ pool: pool, order: orderList, hand: hand, stats: stats, diskDirty: diskDirty,
+         hi: {}, fly: null, say: "已重置。当前算法：" + algo + "。" });
+  document.getElementById("seqView").innerHTML = "";
+};
+function setAlgo(a) {
+  algo = a;
+  document.getElementById("tabLRU").className = (a === "LRU" ? "on" : "");
+  document.getElementById("tabCLK").className = (a === "Clock" ? "on" : "");
+  document.getElementById("algoName").textContent = a;
+  if (timer) { clearInterval(timer); timer = null; }
+  queue = []; freshState();
+  draw({ pool: pool, order: orderList, hand: hand, stats: stats, diskDirty: diskDirty,
+         hi: {}, fly: null,
+         say: a === "LRU"
+           ? "切到 <b>LRU</b>：命中即提到队首，踢队尾。精确，但每次命中都要改链表（要 latch）。"
+           : "切到 <b>Clock / 二次机会</b>：命中只置一个引用位，踢人时绕圈扫。近似 LRU，代价低得多 —— " +
+             "InnoDB、PostgreSQL 的 Buffer Pool 走的都是这一类思路（InnoDB 还在链表 5/8 处插入新页，" +
+             "专门防全表扫描把热页冲光）。"});
+  saveCompare();
+}
+document.getElementById("tabLRU").onclick = function () { setAlgo("LRU"); };
+document.getElementById("tabCLK").onclick = function () { setAlgo("Clock"); };
+function log(t) { document.getElementById("say").innerHTML = t; }
+
+freshState();
+draw({ pool: pool, order: orderList, hand: hand, stats: stats, diskDirty: diskDirty, hi: {}, fly: null, say: "" });
+</script>
+</body>
+</html>

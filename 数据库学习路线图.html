@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>数据库修炼路线图 — 写给 C++ 工程师的七关</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --bg2: #1e293b;
+    --surface: #1e293b;
+    --surface-2: #334155;
+    --ink: #f1f5f9;
+    --ink-muted: #94a3b8;
+    --ink-dim: #64748b;
+    --rule: #334155;
+    --accent: #38bdf8;
+    --accent-2: #818cf8;
+    --success: #4ade80;
+    --warning: #fbbf24;
+    --danger: #f87171;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                 "Microsoft YaHei", "Hiragino Sans GB", sans-serif;
+    background: var(--bg); color: var(--ink);
+    line-height: 1.75; font-size: 15px;
+  }
+  .container { max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  /* ---------- hero ---------- */
+  .hero {
+    text-align: center; padding: 64px 20px 52px;
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 50%, #1e1b4b 100%);
+    border-bottom: 1px solid var(--rule);
+  }
+  .hero h1 {
+    font-size: 2.5rem; font-weight: 700; margin-bottom: 14px;
+    background: linear-gradient(135deg, #38bdf8, #818cf8);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .hero .sub { font-size: 1.1rem; color: var(--ink-muted); margin-bottom: 26px; }
+  .hero .meta { display: flex; justify-content: center; gap: 34px; flex-wrap: wrap; }
+  .hero .meta-item { color: var(--ink-muted); font-size: .95rem; }
+  .hero .meta-item strong { color: var(--accent); font-size: 1.25rem; display: block; }
+
+  section { margin: 56px 0; }
+  h2 {
+    font-size: 1.55rem; margin-bottom: 22px; padding-bottom: 10px;
+    border-bottom: 2px solid var(--accent); display: inline-block;
+  }
+  h3 { font-size: 1.1rem; margin: 24px 0 10px; color: var(--accent); }
+  p { margin-bottom: 12px; color: var(--ink-muted); }
+  p strong, li strong { color: var(--ink); }
+  code {
+    font-family: "JetBrains Mono", Consolas, "Courier New", monospace;
+    background: var(--surface-2); padding: 2px 6px; border-radius: 4px;
+    font-size: .88em; color: #a5f3fc;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  ul, ol { margin: 0 0 14px 22px; color: var(--ink-muted); }
+  li { margin-bottom: 7px; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--rule);
+    border-radius: 12px; padding: 20px 22px; margin-bottom: 16px;
+  }
+  .callout {
+    background: rgba(56,189,248,.07); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 16px 20px; margin: 18px 0;
+  }
+  .callout.warn { background: rgba(251,191,36,.07); border-left-color: var(--warning); }
+  .callout.master { background: rgba(129,140,248,.08); border-left-color: var(--accent-2); }
+  .callout .who {
+    display: block; font-size: .8rem; letter-spacing: .08em;
+    color: var(--accent); margin-bottom: 6px; font-weight: 600;
+  }
+  .callout.warn .who { color: var(--warning); }
+  .callout.master .who { color: var(--accent-2); }
+  .callout p:last-child { margin-bottom: 0; }
+
+  /* ---------- 主线命题 ---------- */
+  .thesis {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-top: 18px;
+  }
+  .thesis .t-card {
+    background: var(--surface); border: 1px solid var(--rule);
+    border-radius: 12px; padding: 18px;
+  }
+  .thesis .t-card .k {
+    font-size: .78rem; letter-spacing: .1em; color: var(--ink-dim);
+    text-transform: uppercase; margin-bottom: 8px;
+  }
+  .thesis .t-card .v { font-size: 1.02rem; color: var(--ink); font-weight: 600; }
+  .thesis .t-card .d { font-size: .88rem; color: var(--ink-muted); margin-top: 6px; }
+  @media (max-width: 760px) { .thesis { grid-template-columns: 1fr; } }
+
+  /* ---------- 七关时间轴 ---------- */
+  .path { position: relative; padding-left: 34px; }
+  .path::before {
+    content: ""; position: absolute; left: 11px; top: 6px; bottom: 6px;
+    width: 2px; background: linear-gradient(180deg, var(--accent), var(--accent-2));
+    opacity: .45;
+  }
+  .stage { position: relative; margin-bottom: 26px; }
+  .stage > .dot {
+    position: absolute; left: -34px; top: 3px; width: 24px; height: 24px;
+    border-radius: 50%; background: var(--bg); border: 2px solid var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: .75rem; font-weight: 700; color: var(--accent);
+  }
+  .stage-card {
+    background: var(--surface); border: 1px solid var(--rule);
+    border-radius: 12px; padding: 20px 22px; transition: border-color .15s;
+  }
+  .stage-card:hover { border-color: var(--accent); }
+  .stage-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .stage-head h3 { margin: 0; color: var(--ink); font-size: 1.2rem; }
+  .badge {
+    font-size: .74rem; padding: 2px 9px; border-radius: 999px;
+    border: 1px solid var(--rule); color: var(--ink-muted); white-space: nowrap;
+  }
+  .badge.hot { border-color: var(--accent); color: var(--accent); }
+  .stage-card .goal { color: var(--ink-muted); margin: 10px 0 12px; font-size: .93rem; }
+  .files { list-style: none; margin: 0; }
+  .files li {
+    display: grid; grid-template-columns: 232px 1fr; gap: 12px;
+    padding: 7px 0; border-top: 1px dashed rgba(148,163,184,.16);
+    font-size: .9rem; margin: 0;
+  }
+  .files li:first-child { border-top: none; }
+  .files .fn { font-family: "JetBrains Mono", Consolas, monospace; font-size: .83rem; }
+  .files .fd { color: var(--ink-dim); }
+  .anim-flag { color: var(--accent-2); font-weight: 600; }
+  .stage-card .note {
+    margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--rule);
+    font-size: .87rem; color: var(--ink-dim);
+  }
+  .stage-card .note b { color: var(--success); }
+  @media (max-width: 700px) { .files li { grid-template-columns: 1fr; gap: 2px; } }
+
+  /* ---------- 表格 ---------- */
+  table {
+    width: 100%; border-collapse: collapse; margin: 14px 0 20px;
+    font-size: .9rem; background: var(--surface); border-radius: 10px; overflow: hidden;
+  }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--rule); }
+  th { background: var(--surface-2); color: var(--ink); font-weight: 600; font-size: .85rem; }
+  td { color: var(--ink-muted); }
+  td:first-child { color: var(--ink); }
+  tr:last-child td { border-bottom: none; }
+
+  pre {
+    background: #0b1120; border: 1px solid var(--rule); border-radius: 10px;
+    padding: 16px 18px; overflow-x: auto; margin: 12px 0 18px;
+    font-family: "JetBrains Mono", Consolas, monospace; font-size: .84rem;
+    line-height: 1.7; color: #cbd5e1;
+  }
+  pre .c { color: var(--ink-dim); }
+  pre .p { color: var(--success); }
+
+  .footer {
+    margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--rule);
+    text-align: center; color: var(--ink-dim); font-size: .9rem;
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>数据库修炼路线图</h1>
+  <p class="sub">写给 C++ 工程师的七关 · 从会写 SELECT 到手搓存储引擎</p>
+  <div class="meta">
+    <div class="meta-item"><strong>7</strong>关卡</div>
+    <div class="meta-item"><strong>22</strong>个 C++ 示例（实测编译通过）</div>
+    <div class="meta-item"><strong>9</strong>个交互动画</div>
+    <div class="meta-item"><strong>1</strong>个迷你数据库</div>
+  </div>
+</div>
+
+<div class="container">
+
+<section>
+  <h2>〇、开场：先把一件事想明白</h2>
+  <p>
+    很多人用了三年数据库，仍把它当"一个能存东西的黑盒"。这门课第一天就要把它拆开：
+    <strong>DBMS 是一个和你平级的独立软件</strong>。你发一句 SQL，它内部要走
+    解析器 → 重写器 → 优化器 → 执行器 → Buffer Pool → 索引 → 锁 → 磁盘页。
+    这一长串东西，本质上全是你熟悉的那类代码：循环、指针、缓存、锁、日志。
+  </p>
+
+  <div class="callout master">
+    <span class="who">老师傅的话</span>
+    <p>
+      数据库的全部设计，都在调和同一对矛盾：<strong>磁盘按页读写且慢得离谱，内存快十万倍却一断电就没</strong>。
+      你后面要学的 B+ 树、Buffer Pool、WAL、MVCC、LSM-Tree，一个都没逃出这个圈。
+      记住这句话，学原理就不会迷路。
+    </p>
+  </div>
+
+  <div class="thesis">
+    <div class="t-card">
+      <div class="k">矛盾一 · 空间</div>
+      <div class="v">数据放不进内存</div>
+      <div class="d">于是有了页、B+ 树、扇出、Buffer Pool、局部性——第 2 关。</div>
+    </div>
+    <div class="t-card">
+      <div class="k">矛盾二 · 时间</div>
+      <div class="v">写一半时断电了</div>
+      <div class="d">于是有了 WAL、undo/redo、checkpoint、崩溃恢复——第 3、5、7 关。</div>
+    </div>
+    <div class="t-card">
+      <div class="k">矛盾三 · 并发</div>
+      <div class="v">一千个人同时改同一行</div>
+      <div class="d">于是有了锁、隔离级别、MVCC、死锁检测——第 3 关。</div>
+    </div>
+  </div>
+
+  <h3>用你已有的 C++ 直觉去理解它</h3>
+  <p>这张对照表是这门课的翻译器。遇到新概念，先回这里找它的 C++ 原型。</p>
+  <table>
+    <tr><th>数据库概念</th><th>你熟悉的 C++ 对应物</th><th>差在哪（这才是要点）</th></tr>
+    <tr>
+      <td>表 / 行</td><td><code>std::vector&lt;Row&gt;</code></td>
+      <td>行要序列化进定长页，长度可变，还得能定位单条</td>
+    </tr>
+    <tr>
+      <td>聚簇索引</td><td>数据本身就 <code>std::map</code> 式有序存放</td>
+      <td>一棵树只能有一种物理序，所以一张表只有一个</td>
+    </tr>
+    <tr>
+      <td>二级索引</td><td><code>std::map&lt;Key, std::vector&lt;RID&gt;&gt;</code></td>
+      <td>value 是"地址"不是数据，取全行要回表</td>
+    </tr>
+    <tr>
+      <td>Buffer Pool</td><td>带淘汰策略的对象缓存池</td>
+      <td>淘汰单位是页；脏页被踢前必须写回，否则丢数据</td>
+    </tr>
+    <tr>
+      <td>WAL / redo log</td><td>先写 journal 再改主数据，最后 <code>fsync</code></td>
+      <td>顺序写换随机写；commit 只等日志，不等数据页</td>
+    </tr>
+    <tr>
+      <td>行锁</td><td>按 key 分片的 <code>std::mutex</code> 池</td>
+      <td>要排队、要超时、要做等待图找环（死锁检测）</td>
+    </tr>
+    <tr>
+      <td>MVCC</td><td>写时复制 + 快照迭代器</td>
+      <td>读不加锁；代价是版本链、清理与"旧版本可见性"规则</td>
+    </tr>
+    <tr>
+      <td>LSM-Tree</td><td><code>std::map</code> 攒批 → 归并排序落盘 → 多层合并</td>
+      <td>写换读：写放大/读放大/空间放大三者互相牵制</td>
+    </tr>
+  </table>
+</section>
+
+<section>
+  <h2>一、七关总览</h2>
+  <p>顺序不要乱。每一关都建立在前一关的地基上，跳过会硌牙。</p>
+  <table>
+    <tr><th>关卡</th><th>目录</th><th>一句话目标</th><th>验收标准</th></tr>
+    <tr><td>🌱 筑基期</td><td><a href="fundamentals/index.html">fundamentals</a></td><td>SQL 写到不用查文档</td><td>沙盒里盲写出 JOIN + 分组 + 排序</td></tr>
+    <tr><td>💎 内功期</td><td><a href="storage_index/index.html">storage_index</a></td><td>看懂数据库的"内存模型"</td><td>说清 B+ 树为什么不是红黑树</td></tr>
+    <tr><td>🔥 心法期</td><td><a href="transactions/index.html">transactions</a></td><td>驾驭并发与崩溃</td><td>能解释 MVCC 下 RR 还幻读吗</td></tr>
+    <tr><td>🔧 兵器期</td><td><a href="cpp_integration/index.html">cpp_integration</a></td><td>把 DB 稳稳接进 C++ 工程</td><td>写出异常安全的 RAII 事务</td></tr>
+    <tr><td>👑 化境期</td><td><a href="query_internals/index.html">query_internals</a></td><td>优化器在想什么</td><td>看 EXPLAIN 就知道慢在哪</td></tr>
+    <tr><td>🗺️ 轻剑期</td><td><a href="nosql_distributed/index.html">nosql_distributed</a></td><td>知道边界，不被选型忽悠</td><td>能讲 LSM 与 B+ 树的取舍</td></tr>
+    <tr><td>🏆 大师期</td><td><a href="minidb/index.html">minidb</a></td><td>自己造一个迷你数据库</td><td>六阶段全绿 + 崩溃恢复成功</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>二、逐关拆解</h2>
+  <div class="path">
+
+    <div class="stage">
+      <div class="dot">1</div>
+      <div class="stage-card">
+        <div class="stage-head">
+          <h3>🌱 筑基期 · 关系模型与 SQL</h3>
+          <span class="badge hot">先当用户，再谈原理</span>
+          <a class="badge" href="fundamentals/index.html">进入本关 →</a>
+        </div>
+        <p class="goal">
+          原理是给"SQL 写不好的人"准备的止痛药。你连查询语义都没吃透，去看 B+ 树只能背结论。
+          这一关把 SQL 打成肌肉记忆，顺手理解关系模型与范式。
+        </p>
+        <ul class="files">
+          <li><span class="fn">tutorial.md</span><span class="fd">为什么要先学 SQL、怎么学、坑在哪</span></li>
+          <li><span class="fn">01_sql_tour.sql</span><span class="fd">图书借阅场景：3 表、由浅入深一整条 SQL 剧本（JOIN / 分组 / 窗口函数 / CTE）</span></li>
+          <li><span class="fn">02_schema_design.sql</span><span class="fd">约束、一对多与多对多、同一个反例拆到 3NF、何时反范式</span></li>
+          <li><span class="fn">03_sql_cpp.cpp</span><span class="fd">C++ 逐条执行 SQL 剧本并打印 <code>EXPLAIN QUERY PLAN</code>，看有无索引的差别</span></li>
+          <li><span class="fn">sql_sandbox.html</span><span class="fd"><span class="anim-flag">【交互】</span>内置迷你 SQL 引擎，写了立刻出结果，还会告诉你"扫了多少行"</span></li>
+          <li><span class="fn">join_visualizer.html</span><span class="fd"><span class="anim-flag">【动画】</span>五种 JOIN 逐行匹配连线，看懂"未命中"到底怎么处理</span></li>
+        </ul>
+        <div class="note">已实测：<b>01_sql_tour.sql</b> 在 sqlite3 3.51 零报错跑通；<b>03_sql_cpp.cpp</b> 编译零警告。</div>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="dot">2</div>
+      <div class="stage-card">
+        <div class="stage-head">
+          <h3>💎 内功期 · 存储引擎与索引</h3>
+          <span class="badge hot">最重要的一关</span>
+          <a class="badge" href="storage_index/index.html">进入本关 →</a>
+        </div>
+        <p class="goal">
+          数据库的"内存模型"。这里想通了，后面所有性能问题都能自己推出来；想不通，优化永远是玄学。
+        </p>
+        <ul class="files">
+          <li><span class="fn">01_disk_and_page.cpp</span><span class="fd">亲手实现 4KB 定长页 + Pager + LRU Buffer Pool，打印每一次磁盘读写</span></li>
+          <li><span class="fn">02_btree_vs_sorted_array.cpp</span><span class="fd">100 万 key 四方案对决：线性 / 二分 / B+ 树 / 红黑树，分开算 CPU 账和 I/O 账</span></li>
+          <li><span class="fn">03_index_in_practice.sql</span><span class="fd">20 万行实测：覆盖索引避免回表、最左前缀、索引失效的 5 种写法</span></li>
+          <li><span class="fn">btree_animator.html</span><span class="fd"><span class="anim-flag">【动画】</span>阶 4 B+ 树插入 → 满 → 分裂 → 上提 → 长高，计数器实时跳动</span></li>
+          <li><span class="fn">bufferpool_animator.html</span><span class="fd"><span class="anim-flag">【动画】</span>LRU vs Clock 命中率对比，一键"制造缓存污染"</span></li>
+        </ul>
+        <div class="note">
+          实测结论：<b>比较次数会骗人，页读取次数才是分水岭</b>——100 万 key 时二分要 20 次随机 I/O，B+ 树只要 <b>4 次（树高）</b>；
+          扇出 101 时千万级数据树高仍只有 4、5 层。
+        </div>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="dot">3</div>
+      <div class="stage-card">
+        <div class="stage-head">
+          <h3>🔥 心法期 · 事务与 ACID</h3>
+          <span class="badge">数据库的并发编程</span>
+          <a class="badge" href="transactions/index.html">进入本关 →</a>
+        </div>
+        <p class="goal">
+          你写过 <code>std::mutex</code>，但你写过"带超时、要检测死锁、还得能被回滚"的锁吗？
+          这一关不靠背表格，靠两个线程真的把数据搞坏给你看。
+        </p>
+        <ul class="files">
+          <li><span class="fn">01_acid_in_sqlite.sql</span><span class="fd">BEGIN/COMMIT/ROLLBACK、SAVEPOINT 部分回滚、WAL 模式、约束兜一致性</span></li>
+          <li><span class="fn">02_transaction_raii.cpp</span><span class="fd">RAII 事务（异常自动回滚）+ <code>SQLITE_BUSY</code> 重试策略</span></li>
+          <li><span class="fn">03_isolation_anomaly_lab.cpp</span><span class="fd">多线程带毫秒时间线，<strong>复现</strong>脏读 / 不可重复读 / 丢失更新，再给两种修法</span></li>
+          <li><span class="fn">04_lock_and_deadlock.cpp</span><span class="fd">手搓行锁管理器：共享/排他、等待队列、超时、等待图找环破死锁</span></li>
+          <li><span class="fn">acid_cheatsheet.md</span><span class="fd">一页速查：ACID 各靠哪个机制、隔离级别对照、死锁排查套路</span></li>
+          <li><span class="fn">mvcc_animator.html</span><span class="fd"><span class="anim-flag">【动画】</span>版本链 + read view，切 RC/RR 看快照时机差别与"命中哪个版本"</span></li>
+          <li><span class="fn">isolation_playground.html</span><span class="fd"><span class="anim-flag">【动画】</span>双事务逐步执行，出现脏读时明确亮徽标并解释；三种隔离级别切换</span></li>
+        </ul>
+        <div class="note">
+          关键认知：<b>ACID 不是四兄弟，是分工</b>——原子性靠 undo log，持久性靠 redo log + fsync，
+          隔离性靠锁 + MVCC，一致性是前三者加业务约束的共同结果。
+        </div>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="dot">4</div>
+      <div class="stage-card">
+        <div class="stage-head">
+          <h3>🔧 兵器期 · C++ 连接数据库</h3>
+          <span class="badge">落进你的工程</span>
+          <a class="badge" href="cpp_integration/index.html">进入本关 →</a>
+        </div>
+        <p class="goal">
+          会用 SQL 不等于会把数据库接进系统。连接怎么管、异常怎么回滚、并发怎么不打死锁、
+          什么时候该回到裸 SQL——这是生产事故的高发区。
+        </p>
+        <ul class="files">
+          <li><span class="fn">01_sqlite_c_api.cpp</span><span class="fd">裸 API 走一遍；先<strong>用字符串拼接制造 SQL 注入</strong>并看到它绕过密码校验，再用预处理修复</span></li>
+          <li><span class="fn">02_raii_wrapper.cpp</span><span class="fd">move-only <code>Db</code> / RAII <code>Stmt</code> / <code>get&lt;T&gt;</code> / 异常安全 <code>Transaction</code>，实测批量单条 vs 单事务耗时差</span></li>
+          <li><span class="fn">03_thread_pool_db.cpp</span><span class="fd">线程安全连接池 + <code>ConnectionGuard</code>；N 线程并发写，打印吞吐与 BUSY 重试次数</span></li>
+          <li><span class="fn">04_mysql_and_orm.cpp</span><span class="fd">MySQL Connector/C++ 与 ODBC 要点、ORM 的 N+1 与隐式事务、手写极简列映射（本机无 MySQL，作工程参考）</span></li>
+          <li><span class="fn">connpool_animator.html</span><span class="fd"><span class="anim-flag">【动画】</span>每次新建连接 / 单连接串行 / 连接池三策略对比，看平均等待与超时数</span></li>
+        </ul>
+        <div class="note">已实测：<b>4 个 .cpp 编译零警告</b>（需 <code>-lsqlite3</code>）；批量事务提速数量级差异由程序真实打印。</div>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="dot">5</div>
+      <div class="stage-card">
+        <div class="stage-head">
+          <h3>👑 化境期 · 查询处理器内幕</h3>
+          <span class="badge">优化器是个会计</span>
+          <a class="badge" href="query_internals/index.html">进入本关 →</a>
+        </div>
+        <p class="goal">
+          优化器不懂真理，它只信统计信息和代价公式。理解这一点，你就再也不会问"为什么不走索引"这种问题了。
+        </p>
+        <ul class="files">
+          <li><span class="fn">01_join_algorithms.cpp</span><span class="fd">块嵌 NL / Index NL / Sort-Merge / Hash Join 同场竞技，比比较次数、内存峰值、耗时</span></li>
+          <li><span class="fn">02_cost_model.cpp</span><span class="fd">手写代价模型与计划选择器；<strong>故意让统计信息过期</strong>，看优化器如何选错、<code>ANALYZE</code> 如何救回</span></li>
+          <li><span class="fn">03_explain_drills.sql</span><span class="fd">15 道 EXPLAIN 训练题（真实计划贴在旁边）：filesort、临时表、驱动表、深分页改写</span></li>
+          <li><span class="fn">04_wal_and_crash.cpp</span><span class="fd">迷你 WAL：LSN + 校验和、commit=fsync、三种崩溃注入、REDO/丢弃/截尾恢复</span></li>
+          <li><span class="fn">explain_pipeline.html</span><span class="fd"><span class="anim-flag">【动画】</span>SQL → 语法树 → 重写 → 优化器代价表 → 火山模型 next() 流动 → 结果</span></li>
+        </ul>
+        <div class="note">
+          实测：<b>统计过期时优化器估 157 选了错计划，真实执行慢 973 倍</b>；<code>ANALYZE</code> 后改选正确计划（代价 1072.5）。
+        </div>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="dot">6</div>
+      <div class="stage-card">
+        <div class="stage-head">
+          <h3>🗺️ 轻剑期 · NoSQL 与分布式的门</h3>
+          <span class="badge">知道边界就够</span>
+          <a class="badge" href="nosql_distributed/index.html">进入本关 →</a>
+        </div>
+        <p class="goal">
+          这关的目标不是精通 NoSQL，而是<strong>别在没到那个规模时引入分片，也别在选型会上被人忽悠</strong>。
+        </p>
+        <ul class="files">
+          <li><span class="fn">01_data_models.cpp</span><span class="fd">KV / 文档 / 列族 / 图 四种模型的最小可用实现，看清各自擅长什么查询</span></li>
+          <li><span class="fn">02_lsm_vs_btree.cpp</span><span class="fd">手写简化 LSM-Tree（memtable → flush → 分层 compaction），量化写放大 / 读放大</span></li>
+          <li><span class="fn">03_concurrency_cpp.cpp</span><span class="fd"><code>std::thread</code> 演示强一致 / 最终一致 / 因果一致，真的读出旧值给你看</span></li>
+          <li><span class="fn">cap_visualizer.html</span><span class="fd"><span class="anim-flag">【动画】</span>三副本 + 一键制造网络分区，CP 拒写 vs AP 双写冲突与向量时钟合并</span></li>
+          <li><span class="fn">lsm_animator.html</span><span class="fd"><span class="anim-flag">【动画】</span>memtable→L0→L1→L2 全链路，查询路径逐层高亮显示读放大，含布隆拦截</span></li>
+        </ul>
+        <div class="note">
+          记住这一句：<b>B+ 树读快、写有页内碎片；LSM 写快、读要穿层</b>。InnoDB 选前者，RocksDB/LevelDB 选后者，没有银弹。
+        </div>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="dot">7</div>
+      <div class="stage-card">
+        <div class="stage-head">
+          <h3>🏆 大师期 · 手搓迷你数据库 miniDB</h3>
+          <span class="badge hot">毕业设计</span>
+          <a class="badge" href="minidb/index.html">进入本关 →</a>
+        </div>
+        <p class="goal">
+          六个阶段，每阶段一个可独立编译运行的程序。写完它，数据库对你不再是黑盒——
+          因为你亲手踩过 B+ 树分裂丢条目、也亲手把撕裂的 WAL 截干净。
+        </p>
+        <ul class="files">
+          <li><span class="fn">phase1_pager.cpp</span><span class="fd">4KB 定长页 + 元数据页 + LRU 页缓存，打印命中率与磁盘读写次数</span></li>
+          <li><span class="fn">phase2_heap_table.cpp</span><span class="fd">RID=(page,slot)、变长行格式（列偏移表 + null bitmap）、slot 复用，万行读写</span></li>
+          <li><span class="fn">phase3_btree_index.cpp</span><span class="fd">落盘 B+ 树二级索引：两种页格式、叶子双向链表、插入分裂、范围扫描</span></li>
+          <li><span class="fn">phase4_wal.cpp</span><span class="fd">预写日志 + 崩溃恢复：撕裂页 / 提交前崩 / 提交后崩三场景真注入</span></li>
+          <li><span class="fn">phase5_sql_frontend.cpp</span><span class="fd">tokenizer + 递归下降解析器 + 选择/投影算子 + <code>EXPLAIN</code> 输出选没走索引</span></li>
+          <li><span class="fn">phase6_bench.cpp</span><span class="fd">汇总基准，并与真 SQLite 20 万行对照，差距如实打印并解释</span></li>
+        </ul>
+        <div class="note">
+          本机实测数字：B+ 树点查比全表扫描快 <b>756 倍</b>、范围查快 <b>20770 倍</b>（树高 2、5 万条、命中率 100%）；
+          三种崩溃场景<b>全部恢复成功</b>且全表总和守恒；写吞吐 <b>SQLite 仍比我们快 1.5 倍</b>——差距在哪，phase6 注释里逐条写清了。
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section>
+  <h2>三、环境与命令</h2>
+  <p>
+    你的机器已具备全部条件：MSYS2 UCRT64 的 <code>g++ 15.2</code>、<code>sqlite3 3.51</code>（含开发头文件与静态库）。
+    <strong>没有 CMake，也不需要</strong>——所有示例刻意做成单文件，直接 <code>g++</code> 就能编译。
+  </p>
+
+<pre><span class="c"># 1) 跑 SQL 剧本（内存库，不留文件）</span>
+<span class="p">C:\&gt;</span> sqlite3 ":memory:" ".read fundamentals\01_sql_tour.sql"
+
+<span class="c"># 2) 开个交互式 sqlite 玩索引</span>
+<span class="p">C:\&gt;</span> sqlite3 学习库.db
+sqlite&gt; .read storage_index\03_index_in_practice.sql
+sqlite&gt; .tables
+sqlite&gt; .schema loans
+
+<span class="c"># 3) 编译 C++ 示例（不需要 SQLite 的）</span>
+<span class="p">C:\&gt;</span> g++ -std=c++17 -O2 -Wall -Wextra storage_index\02_btree_vs_sorted_array.cpp -o demo.exe
+<span class="p">C:\&gt;</span> .\demo.exe
+
+<span class="c"># 4) 需要链 SQLite 的（第 1、3、4 关与 minidb phase6）</span>
+<span class="p">C:\&gt;</span> g++ -std=c++17 -O2 cpp_integration\01_sqlite_c_api.cpp -o demo.exe -lsqlite3
+
+<span class="c"># 5) 动画页面无需任何服务，双击 HTML 即可（零外部依赖、可离线）</span></pre>
+
+  <div class="callout warn">
+    <span class="who">三个环境坑</span>
+    <p>
+      ① <strong>SQLite 外键默认关闭</strong>，每个新连接都要 <code>PRAGMA foreign_keys = ON;</code>，否则非法数据悄悄插进去，
+      你会误以为外键没用（它是连接级、不是库级）。
+      ② <code>fundamentals/02_schema_design.sql</code> 和 <code>transactions/01_acid_in_sqlite.sql</code>
+      跑完<strong>退出码是 1</strong>，那是刻意制造的约束冲突与锁冲突演示，不是文件坏了。
+      ③ 程序里生成的 <code>.db</code> / <code>.exe</code> 用完自己删，别留在库里。
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2>四、怎么学才算学会了</h2>
+  <ol>
+    <li><strong>每关先跑再读。</strong>把示例编译跑起来，看输出，再回头读注释。倒过来就成了看小说。</li>
+    <li><strong>动画要先猜再看。</strong>比如 B+ 树动画：先自己在纸上预测插入 30、40 后树长成什么样，再点"插入"验证。猜错的那次才是学习发生的时刻。</li>
+    <li><strong>每关的 <code>tutorial.md</code> 末尾有课后练习，必须动手。</strong>只做到"看懂"，一周后剩三成。</li>
+    <li><strong>用输出数字校准直觉。</strong>别信"看起来对"，信退出码、信你亲手打出来的数字——这是这门课反复验证的一条。</li>
+    <li><strong>最后一定要自己写 minidb，而不是读它。</strong>建议每阶段先只读需求说明，自己实现，卡住 30 分钟以上再对照参考实现。</li>
+  </ol>
+
+  <h3>建议节奏</h3>
+  <table>
+    <tr><th>你现在的状态</th><th>怎么走</th></tr>
+    <tr><td>SQL 只会 <code>SELECT *</code></td><td>第 1 关走满，沙盒和 JOIN 动画各玩 20 分钟，再进第 2 关</td></tr>
+    <tr><td>SQL 熟，但只会调 API</td><td>第 1 关只看 03 和动画热身，直接扎进第 2、3 关</td></tr>
+    <tr><td>原理大概懂，面试发虚</td><td>第 3、5、6 关为主，重点做"先猜再看"的动画验证</td></tr>
+    <tr><td>想真正吃透</td><td>老老实实七关走完，最后手搓 minidb（这才是简历上能讲两小时的东西）</td></tr>
+  </table>
+
+  <h3>这门课刻意不讲的东西</h3>
+  <p>
+    DBA 运维（备份、主从搭建、参数调优面板）、具体云厂商产品、存储过程与触发器编程、
+    以及分布式共识算法（Raft/Paxos）的完整推导——它们都重要，但都不是"理解数据库"的必要条件。
+    把地基打牢，那些是查文档就会的事。
+  </p>
+</section>
+
+<section>
+  <h2>五、通关之后</h2>
+  <div class="callout">
+    <span class="who">老师傅的话</span>
+    <p>
+      数据库是计算机科学里少数"理论彻底落进工程"的地方。B+ 树在课本上是练习题，
+      在这里是三万倍的性能差；WAL 在课本上是两行定义，在这里是断电后你的钱还在不在。
+      你现在已经知道它们每一个字节是怎么排的了——往后遇到任何数据库，
+      MySQL、PostgreSQL、RocksDB、TiDB，你看到的都是熟悉的老朋友。
+    </p>
+    <p>
+      想再往上走，三条路：<strong>《Database System Concepts》</strong>补理论体系；
+      <strong>CMU 15-445</strong> 公开课 + 它的 Project 4 把并发控制做扎实；
+      或者直接去读 <strong>SQLite 源码</strong>——它是这个星球上最值得我们这种人读的工程杰作，
+      单文件、注释极好、你前面七关学的东西在里面一一对得上号。
+    </p>
+  </div>
+</section>
+
+<div class="footer">
+  <p>数据库修炼路线图 · 全部 22 个 C++ 示例已在 g++ 15.2 实测编译通过 · 9 个动画零外部依赖可离线运行</p>
+  <p>师傅领进门，修行在个人。数据库是跑出来的，不是看出来的。</p>
+</div>
+
+</div>
+</body>
+</html>

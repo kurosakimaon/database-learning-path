@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MiniDB · 老师傅带徒弟 —— 用 C++ 手搓迷你数据库</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --bg-soft: #131c33;
+    --card: #1e293b;
+    --card-hover: #233046;
+    --line: #2c3b57;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --accent2: #818cf8;
+    --ok: #34d399;
+    --code-bg: #0b1220;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
+    line-height: 1.7;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  header { text-align: center; padding: 48px 0 8px; }
+  header h1 {
+    font-size: 2.4rem; letter-spacing: 2px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  header p.sub { color: var(--muted); margin-top: 10px; font-size: 1.02rem; }
+  header .rule {
+    display: inline-block; margin-top: 18px; padding: 6px 18px;
+    border: 1px solid var(--line); border-radius: 999px;
+    color: var(--accent); font-size: .86rem; background: var(--bg-soft);
+  }
+
+  h2.sec {
+    margin: 54px 0 18px; font-size: 1.35rem; color: var(--accent);
+    border-left: 4px solid var(--accent2); padding-left: 12px;
+  }
+  p.note { color: var(--muted); font-size: .92rem; margin-bottom: 16px; }
+
+  /* ---------- 依赖图 ---------- */
+  .dep {
+    background: var(--bg-soft); border: 1px solid var(--line);
+    border-radius: 14px; padding: 22px 10px 10px;
+  }
+  .dep svg { display: block; width: 100%; height: auto; }
+
+  /* ---------- 阶段卡片 ---------- */
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 20px 22px; transition: transform .15s ease, border-color .15s ease, background .15s ease;
+  }
+  .card:hover { transform: translateY(-3px); border-color: var(--accent); background: var(--card-hover); }
+  .card .tag {
+    display: inline-block; font-size: .74rem; color: #0b1220; font-weight: 700;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 6px; padding: 2px 10px; letter-spacing: 1px;
+  }
+  .card h3 { margin: 10px 0 6px; font-size: 1.12rem; }
+  .card p.desc { color: var(--muted); font-size: .9rem; min-height: 3.4em; }
+  .card ul { list-style: none; margin-top: 10px; font-size: .88rem; }
+  .card li { margin: 5px 0; padding-left: 1.35em; position: relative; }
+  .card li.k::before { content: "◆"; position: absolute; left: 0; color: var(--accent2); font-size: .72em; top: .35em; }
+  .card li.f::before { content: "▸"; position: absolute; left: 0; color: var(--accent); }
+  .card code { color: var(--ok); font-family: Consolas, "Courier New", monospace; font-size: .86em; }
+
+  /* ---------- 命令速查 ---------- */
+  .cmds { background: var(--code-bg); border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; }
+  .cmds pre {
+    font-family: Consolas, "Courier New", monospace; font-size: .92rem;
+    color: #d7e2f4; overflow-x: auto; padding: 10px 0;
+  }
+  .cmds .c { color: #64748b; }
+  .cmds .p { color: var(--accent); }
+  .cmds .f2 { color: var(--ok); }
+  .tips { margin-top: 14px; color: var(--muted); font-size: .88rem; }
+  .tips b { color: var(--accent); }
+
+  footer {
+    margin-top: 60px; text-align: center; color: var(--muted); font-size: .85rem;
+    border-top: 1px dashed var(--line); padding-top: 22px;
+  }
+  footer .master { color: var(--accent2); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>MiniDB 学习导航</h1>
+    <p class="sub">老师傅带徒弟：六个阶段，从第一个字节开始，手搓一个迷你数据库</p>
+    <span class="rule">退出码 0 才算过 · 数字必须真实 · 严禁造假</span>
+  </header>
+
+  <h2 class="sec">六阶段依赖图</h2>
+  <p class="note">地基 → 房子 → 书架 → 保险柜 → 门面 → 跑道。每一级都踩实了再上下一级，卡住了就回头，别跳级。</p>
+  <div class="dep">
+    <svg viewBox="0 0 1040 210" role="img" aria-label="六阶段依赖图">
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#818cf8"/>
+        </marker>
+        <linearGradient id="node" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#1e293b"/><stop offset="1" stop-color="#233046"/>
+        </linearGradient>
+      </defs>
+      <!-- 连线 -->
+      <line x1="160" y1="70" x2="196" y2="70" stroke="#818cf8" stroke-width="2" marker-end="url(#arr)"/>
+      <line x1="336" y1="70" x2="372" y2="70" stroke="#818cf8" stroke-width="2" marker-end="url(#arr)"/>
+      <line x1="512" y1="70" x2="548" y2="70" stroke="#818cf8" stroke-width="2" marker-end="url(#arr)"/>
+      <line x1="688" y1="70" x2="724" y2="70" stroke="#818cf8" stroke-width="2" marker-end="url(#arr)"/>
+      <line x1="864" y1="70" x2="900" y2="70" stroke="#818cf8" stroke-width="2" marker-end="url(#arr)"/>
+      <!-- 汇到阶段6的竖线装饰 -->
+      <path d="M 940 100 L 940 150 L 100 150 L 100 100" fill="none" stroke="#2c3b57" stroke-width="1.5" stroke-dasharray="5 5"/>
+      <text x="520" y="143" fill="#64748b" font-size="12" text-anchor="middle">阶段 1~5 的一切，最终都要在阶段 6 的跑道上见真章</text>
+      <!-- 节点 -->
+      <g font-family="Microsoft YaHei, sans-serif">
+        <g>
+          <rect x="40" y="40" width="120" height="60" rx="12" fill="url(#node)" stroke="#38bdf8" stroke-width="1.5"/>
+          <text x="100" y="66" fill="#e2e8f0" font-size="15" text-anchor="middle" font-weight="bold">① Pager</text>
+          <text x="100" y="88" fill="#94a3b8" font-size="11.5" text-anchor="middle">4KB 页 + LRU</text>
+        </g>
+        <g>
+          <rect x="216" y="40" width="120" height="60" rx="12" fill="url(#node)" stroke="#38bdf8" stroke-width="1.5"/>
+          <text x="276" y="66" fill="#e2e8f0" font-size="15" text-anchor="middle" font-weight="bold">② 堆表</text>
+          <text x="276" y="88" fill="#94a3b8" font-size="11.5" text-anchor="middle">RID + 槽位目录</text>
+        </g>
+        <g>
+          <rect x="392" y="40" width="120" height="60" rx="12" fill="url(#node)" stroke="#38bdf8" stroke-width="1.5"/>
+          <text x="452" y="66" fill="#e2e8f0" font-size="15" text-anchor="middle" font-weight="bold">③ B+ 树</text>
+          <text x="452" y="88" fill="#94a3b8" font-size="11.5" text-anchor="middle">落盘二级索引</text>
+        </g>
+        <g>
+          <rect x="568" y="40" width="120" height="60" rx="12" fill="url(#node)" stroke="#38bdf8" stroke-width="1.5"/>
+          <text x="628" y="66" fill="#e2e8f0" font-size="15" text-anchor="middle" font-weight="bold">④ WAL</text>
+          <text x="628" y="88" fill="#94a3b8" font-size="11.5" text-anchor="middle">崩溃恢复</text>
+        </g>
+        <g>
+          <rect x="744" y="40" width="120" height="60" rx="12" fill="url(#node)" stroke="#38bdf8" stroke-width="1.5"/>
+          <text x="804" y="66" fill="#e2e8f0" font-size="15" text-anchor="middle" font-weight="bold">⑤ SQL 前端</text>
+          <text x="804" y="88" fill="#94a3b8" font-size="11.5" text-anchor="middle">解析 + 执行</text>
+        </g>
+        <g>
+          <rect x="900" y="40" width="120" height="60" rx="12" fill="url(#node)" stroke="#818cf8" stroke-width="2"/>
+          <text x="960" y="66" fill="#e2e8f0" font-size="15" text-anchor="middle" font-weight="bold">⑥ 大考</text>
+          <text x="960" y="88" fill="#94a3b8" font-size="11.5" text-anchor="middle">vs SQLite 实测</text>
+        </g>
+      </g>
+    </svg>
+  </div>
+
+  <h2 class="sec">六阶段卡片</h2>
+  <div class="grid">
+
+    <div class="card">
+      <span class="tag">阶段 1 · 地基</span>
+      <h3>Pager：按页读写一个文件</h3>
+      <p class="desc">数据库的地基：4096 字节定长页是唯一读写单位，页 0 放元数据，LRU 页缓存带真实命中率统计，跨页写 200 条记录关掉重开逐条对 checksum。</p>
+      <ul>
+        <li class="k">定长页 / 元数据页 / LRU = 哈希表 + 双向链表</li>
+        <li class="k">小端序列化 putU16/32/64 · FNV-1a 校验和</li>
+        <li class="f">源码：<code>phase1_pager.cpp</code></li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <span class="tag">阶段 2 · 房子</span>
+      <h3>堆表：一行数据到底长什么样</h3>
+      <p class="desc">变长字段、NULL、删除三件事逼出页内槽位目录：页头 + slot 目录从前长、记录从后堆。RID = (page_id, slot)，是住址不是身份。</p>
+      <ul>
+        <li class="k">槽位目录 / 变长行编码（位图 + 偏移表）</li>
+        <li class="k">insert / get / delete / scan · 槽位复用</li>
+        <li class="f">源码：<code>phase2_heap_table.cpp</code></li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <span class="tag">阶段 3 · 书架</span>
+      <h3>落盘 B+ 树二级索引</h3>
+      <p class="desc">把"按值找行"从全表扫描里捞出来。叶子双向链表让范围扫描不回头碰树；扇出按 4KB 页实算；插入"等于往右"、搜索"等于往左"。</p>
+      <ul>
+        <li class="k">叶子/内部两种页格式 · 兄弟链表 · 分裂</li>
+        <li class="k">实测加速比、树高、每层读页数真实打印</li>
+        <li class="f">源码：<code>phase3_btree_index.cpp</code></li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <span class="tag">阶段 4 · 保险柜</span>
+      <h3>预写日志与崩溃恢复</h3>
+      <p class="desc">WAL 纪律三条：改页前日志先行并 fsync；commit 只 fsync WAL；恢复按校验和扫日志、撕裂尾截掉、只 REDO 已提交。子进程 exit(9) 模拟真断电。</p>
+      <ul>
+        <li class="k">(LSN, page, 前像/后像) 记录 · checkpoint</li>
+        <li class="k">三种崩溃场景 A/B/C 全部恢复成功才算过</li>
+        <li class="f">源码：<code>phase4_wal.cpp</code></li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <span class="tag">阶段 5 · 门面</span>
+      <h3>迷你 SQL 前端</h3>
+      <p class="desc">手写 tokenizer + 递归下降解析器：CREATE / INSERT / SELECT（WHERE、ORDER BY、LIMIT）+ EXPLAIN。谓词能下推 B+ 树就 IndexScan，否则 TableScan。</p>
+      <ul>
+        <li class="k">分词 → AST → 逻辑计划 → 流水线执行</li>
+        <li class="k">中文表格对齐 · 规模实测索引 vs 全表对账</li>
+        <li class="f">源码：<code>phase5_sql_frontend.cpp</code></li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <span class="tag">阶段 6 · 跑道</span>
+      <h3>汇总基准 vs SQLite</h3>
+      <p class="desc">写入吞吐、点查、范围查、崩溃恢复四组实测对照 SQLite C API；双方都"真死一次"验证恢复。所有差距如实打印、逐项解释、逐项对账。</p>
+      <ul>
+        <li class="k">RNG 同种子同序列 · 每组结果双路对账</li>
+        <li class="k">口径意识：先问比的是不是同一件事</li>
+        <li class="f">源码：<code>phase6_bench.cpp</code>（-lsqlite3）</li>
+      </ul>
+    </div>
+
+  </div>
+
+  <h2 class="sec">编译命令速查</h2>
+  <div class="cmds">
+<pre><span class="c"># 阶段 1~5：单文件自包含，零依赖</span>
+<span class="p">g++ -std=c++17 -O2 -Wall -Wextra</span> <span class="f2">phase1_pager.cpp</span>        -o phase1_pager.exe
+<span class="p">g++ -std=c++17 -O2 -Wall -Wextra</span> <span class="f2">phase2_heap_table.cpp</span>    -o phase2_heap_table.exe
+<span class="p">g++ -std=c++17 -O2 -Wall -Wextra</span> <span class="f2">phase3_btree_index.cpp</span>   -o phase3_btree_index.exe
+<span class="p">g++ -std=c++17 -O2 -Wall -Wextra</span> <span class="f2">phase4_wal.cpp</span>           -o phase4_wal.exe
+<span class="p">g++ -std=c++17 -O2 -Wall -Wextra</span> <span class="f2">phase5_sql_frontend.cpp</span>  -o phase5_sql_frontend.exe
+
+<span class="c"># 阶段 6：链接 SQLite（msys64 ucrt64 已装 libsqlite3）</span>
+<span class="p">g++ -std=c++17 -O2 -Wall -Wextra</span> <span class="f2">phase6_bench.cpp</span>         -o phase6_bench.exe <span class="p">-lsqlite3</span>
+
+<span class="c"># 运行：看退出码，别看心情</span>
+.\phase5_sql_frontend.exe
+<span class="c">echo $LASTEXITCODE   # 0 = 全部对账通过</span></pre>
+    <p class="tips">
+      <b>零警告</b>是及格线；<b>退出码 0</b> 是验收线。
+      阶段 4 与阶段 6 会自动拉起子进程模拟崩溃，控制台有"进程死亡"字样属正常剧情，别慌。
+      PowerShell 里中文乱码就先执行 <b>SetConsoleOutputCP(65001)</b>（源码里已自带）。
+    </p>
+  </div>
+
+  <h2 class="sec">配套读物</h2>
+  <div class="grid">
+    <div class="card">
+      <span class="tag">指南</span>
+      <h3>tutorial.md</h3>
+      <p class="desc">老师傅口吻的项目全指南：六个阶段与验收标准、文件列表与学习重点、动手扩展方向、课后练习。开工前通读，卡壳时查阅。</p>
+      <ul><li class="f">同级目录：<code>tutorial.md</code></li></ul>
+    </div>
+    <div class="card">
+      <span class="tag">本页</span>
+      <h3>index.html</h3>
+      <p class="desc">自包含导航页：零外部资源、零网络请求，双击即开。依赖图是内联 SVG，卡片随窗口宽度自适应，断网也能用 —— 就像这六个阶段，不靠任何第三方引擎。</p>
+      <ul><li class="f">本文件：<code>index.html</code></li></ul>
+    </div>
+  </div>
+
+  <footer>
+    <p class="master">"别信'看起来对'，信退出码，信你亲手打出来的数字。" —— 老师傅</p>
+    <p>MiniDB · 教学项目 · 本页零外部依赖</p>
+  </footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MVCC 版本链动画 · 第 3 关</title>
+<style>
+  :root {
+    --bg: #0f172a; --bg2: #1e293b; --line: #334155;
+    --ink: #e2e8f0; --dim: #94a3b8;
+    --blue: #38bdf8; --indigo: #818cf8; --green: #34d399;
+    --amber: #fbbf24; --red: #f87171;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 14px/1.6 "Segoe UI", "Microsoft YaHei", sans-serif;
+    min-height: 100vh; padding: 20px 24px 40px;
+  }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  h1 .tag { color: var(--blue); }
+  .sub { color: var(--dim); font-size: 13px; margin-bottom: 16px; }
+  .bar {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    background: var(--bg2); border: 1px solid var(--line);
+    border-radius: 10px; padding: 10px 12px; margin-bottom: 16px;
+  }
+  button {
+    background: #0b1220; color: var(--ink); border: 1px solid var(--line);
+    border-radius: 8px; padding: 7px 12px; cursor: pointer; font-size: 13px;
+    transition: all .15s;
+  }
+  button:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }
+  button:disabled { opacity: .35; cursor: not-allowed; }
+  button.t1 { border-color: #1d4ed8aa; }
+  button.t2 { border-color: #7c3aedaa; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button { border: none; border-radius: 0; }
+  .seg button.on { background: var(--blue); color: #06121f; font-weight: 600; }
+  .seg .lab { padding: 7px 10px; color: var(--dim); font-size: 12px; align-self: center; }
+  .sep { width: 1px; height: 26px; background: var(--line); margin: 0 4px; }
+  .cols { display: grid; grid-template-columns: 380px 1fr; gap: 16px; }
+  @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--bg2); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .panel h2 { font-size: 14px; color: var(--blue); margin-bottom: 10px; }
+  .chainwrap svg { width: 100%; height: auto; display: block; }
+  .tlrow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-height: 40px; margin-bottom: 8px; }
+  .tlname { width: 44px; font-weight: 700; flex: none; }
+  .tlname.t1 { color: #60a5fa; } .tlname.t2 { color: var(--indigo); }
+  .ev {
+    border-radius: 7px; padding: 3px 9px; font-size: 12px;
+    border: 1px solid var(--line); background: #0b1220; color: var(--dim);
+  }
+  .ev.hit { border-color: var(--green); color: var(--green); }
+  .arrow { color: var(--line); }
+  .viewbox {
+    margin-top: 10px; border: 1px dashed var(--indigo); border-radius: 10px;
+    padding: 8px 12px; font-size: 12px; color: var(--dim); background: #131b2e;
+  }
+  .viewbox b { color: var(--indigo); }
+  #log {
+    margin-top: 14px; background: #0b1220; border: 1px solid var(--line);
+    border-radius: 10px; padding: 10px 12px; height: 200px; overflow-y: auto;
+    font-size: 12.5px; font-family: Consolas, "Courier New", monospace;
+  }
+  #log p { margin: 1px 0; color: var(--dim); }
+  #log p.t1 { color: #60a5fa; } #log p.t2 { color: var(--indigo); }
+  #log p.sys { color: var(--green); } #log p.warn { color: var(--amber); }
+  .explain {
+    margin-top: 10px; border-left: 3px solid var(--amber); padding: 6px 10px;
+    background: #1a2236; border-radius: 0 8px 8px 0; font-size: 13px; color: #fde68a;
+    min-height: 34px;
+  }
+  .foot { margin-top: 22px; color: var(--dim); font-size: 13px; line-height: 2; }
+  .foot b { color: var(--ink); }
+</style>
+</head>
+<body>
+<h1>MVCC 版本链实验室 <span class="tag">—— 快照 = 顺着 undo 链往回找第一个"对我可见"的版本</span></h1>
+<p class="sub">左边是一行数据的版本链（每次 UPDATE 压一个新版本，旧版本靠 undo 指针串着）；右边是 T1/T2 的时间线和 read view。先手动点按钮玩，再点「自动播放」看 RC 和 RR 的分水岭。</p>
+
+<div class="bar">
+  <span class="lab" style="color:var(--dim)">隔离级别</span>
+  <span class="seg" id="lvseg">
+    <button id="btnRC" class="on">READ COMMITTED</button>
+    <button id="btnRR">REPEATABLE READ</button>
+  </span>
+  <span class="sep"></span>
+  <button class="t1" id="b1">T1 开始</button>
+  <button class="t1" id="b2">T1 更新</button>
+  <button class="t1" id="b3">T1 提交</button>
+  <span class="sep"></span>
+  <button class="t2" id="b4">T2 开始</button>
+  <button class="t2" id="b5">T2 查询</button>
+  <span class="sep"></span>
+  <button id="bAuto">▶ 自动播放</button>
+  <button id="bReset">重置</button>
+</div>
+
+<div class="cols">
+  <div class="panel">
+    <h2>版本链（trx_id 藏着掖着，正是它的身份证）</h2>
+    <div class="chainwrap"><svg id="chain" viewBox="0 0 340 460"></svg></div>
+  </div>
+  <div>
+    <div class="panel">
+      <h2>事务时间线 & read view</h2>
+      <div class="tlrow"><span class="tlname t1">T1</span><span id="tl1"><span class="ev" style="opacity:.4">（还没开始）</span></span></div>
+      <div class="tlrow"><span class="tlname t2">T2</span><span id="tl2"><span class="ev" style="opacity:.4">（还没开始）</span></span></div>
+      <div class="viewbox" id="viewbox">T2 还没做过任何查询 —— read view 还没建立。</div>
+      <div class="explain" id="explain">提示：RC 和 RR 的唯一区别是 <b>read view 建立的时机</b> —— RC 每条语句拍一次，RR 事务里第一次读拍一次、钉死用到头。</div>
+    </div>
+    <div id="log"></div>
+    <div class="foot">
+      <b>可见性判断三问</b>（顺着版本链从上往下，对每个版本问）：<br>
+      ① 是我自己写的吗？→ 可见（所以才读得到自己未提交的修改）；<br>
+      ② 写它的事务在我建立 read view 时提交完了吗？→ 可见；<br>
+      ③ 都没中 → 这个版本当我存在，沿 undo 指针往下一个版本接着问。<br>
+      第一个过了安检的版本，就是查询真正返回的那一行。
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  // ---------- 状态 ----------
+  var S = null;
+  function fresh() {
+    return {
+      level: 'RC',
+      clock: 10,                       // 全局事务时钟（trx_id 和提交序都用它）
+      versions: [{ trx: 10, commitClock: 9, value: 100, committed: true, who: '建表事务' }],
+      t1: null, t2: null,
+      t1Seq: 0,
+      t2View: null,                    // RR 用：钉死的 read view
+      autoTimer: null, autoStep: 0,
+      tl1: [], tl2: []
+    };
+  }
+
+  // ---------- 工具 ----------
+  function $(id) { return document.getElementById(id); }
+  function log(msg, cls) {
+    var p = document.createElement('p');
+    p.className = cls || '';
+    p.textContent = msg;
+    var box = $('log');
+    box.appendChild(p);
+    box.scrollTop = box.scrollHeight;
+  }
+  function explain(msg) { $('explain').innerHTML = msg; }
+
+  // ---------- read view ----------
+  // read view = { snap: 建立时的全局提交时钟, self: 事务号 }
+  // 版本可见 = 版本是本人写的，或 (已提交 且 提交序号 <= snap)
+  function visible(v, view) {
+    if (v.trx === view.self) return true;
+    return v.committed && v.commitClock <= view.snap;
+  }
+  function makeView(txn) { return { snap: S.clock, self: txn }; }
+
+  // ---------- 事件 ----------
+  function startT1() {
+    if (S.t1) return;
+    S.clock += 10;
+    S.t1 = { id: S.clock, commitSeq: 0 };
+    log('T1 开始，trx_id = ' + S.t1.id, 't1');
+    S.tl1.push('BEGIN');
+    explain('T1 出生了，领到身份证号 <b>trx_id=' + S.t1.id + '</b>。之后它写的每个版本都盖这个章。');
+    render();
+  }
+  function updateT1() {
+    if (!S.t1) { explain('先点「T1 开始」。'); return; }
+    S.t1Seq += 1;
+    var val = 900 + S.t1Seq;           // 901, 902, ...
+    var top = S.versions[0];
+    S.versions.unshift({ trx: S.t1.id, commitClock: null, value: val, committed: false, who: 'T1' });
+    log('T1 UPDATE v: ' + top.value + ' → ' + val + '（未提交，版本盖 trx_id=' + S.t1.id + '）', 't1');
+    explain('新版本压到链头，旧版本不删 —— 这就是「<b>写时复制</b>」：改的人只压新副本，看旧数据的人一根毫毛都没动。');
+    render();
+  }
+  function commitT1() {
+    if (!S.t1) return;
+    var n = 0;
+    for (var i = 0; i < S.versions.length; i++) {
+      if (!S.versions[i].committed && S.versions[i].trx === S.t1.id) {
+        S.versions[i].committed = true;
+        S.clock += 1;
+        S.versions[i].commitClock = S.clock;
+        n++;
+      }
+    }
+    log('T1 COMMIT：' + n + ' 个版本盖章提交（提交序号 = ' + S.clock + '）', 't1');
+    S.tl1.push('COMMIT');
+    explain('提交不搬数据，只<b>盖一个提交时间戳</b>。从这一刻起，新建立的 read view 就能看见这些版本了 —— 注意「新建立的」四个字。');
+    S.t1 = null;                       // T1 收工
+    render();
+  }
+  function startT2() {
+    if (S.t2) return;
+    S.clock += 10;
+    S.t2 = { id: S.clock };
+    S.t2View = null;
+    log('T2 开始，trx_id = ' + S.t2.id, 't2');
+    S.tl2.push('BEGIN');
+    explain(S.level === 'RR'
+      ? 'RR 下 T2 的 read view 要等<b>第一次读</b>才拍（不是 BEGIN 时，InnoDB 就是这么抠的）。'
+      : 'RC 下现在还没有 read view —— 每条语句开始时才现拍。');
+    render();
+  }
+  function queryT2() {
+    if (!S.t2) { explain('先点「T2 开始」。'); return; }
+    var view, note;
+    if (S.level === 'RR') {
+      if (!S.t2View) { S.t2View = makeView(S.t2.id); note = '第一次读 → <b>建立 read view 并钉死</b>（snap=' + S.t2View.snap + '），本事务用到头'; }
+      else { view = true; note = 'RR：继续用第一次钉死的 read view（snap=' + S.t2View.snap + '），外面提交了我也不看'; }
+      view = S.t2View;
+    } else {
+      view = makeView(S.t2.id);
+      note = 'RC：<b>这条语句现拍新 read view</b>（snap=' + view.snap + '）—— 之前提交的现在都能看见';
+    }
+    // 顺链找第一个可见版本
+    var hit = null, skipped = [];
+    for (var i = 0; i < S.versions.length; i++) {
+      if (visible(S.versions[i], view)) { hit = i; break; }
+      skipped.push(S.versions[i]);
+    }
+    var v = S.versions[hit];
+    S.tl2.push('SELECT=' + v.value);
+    log('T2 查询：跳过 ' + skipped.length + ' 个不可见版本 → 读到 v = ' + v.value + '（trx_id=' + v.trx + ' 写的）', 't2');
+    for (var k = 0; k < skipped.length; k++) {
+      log('  ✂ 版本 ' + skipped[k].value + '（trx=' + skipped[k].trx + '，' +
+          (skipped[k].committed ? '提交序号' + skipped[k].commitClock + ' > snap' + view.snap : '还没提交') + '）不可见', 'warn');
+    }
+    explain(note + '。命中版本 <b>' + v.value + '</b>。' + (skipped.length ? '链头那个版本对它不可见，沿 undo 指针往下找到了这个。' : ''));
+    S.lastHit = hit;
+    render();
+  }
+
+  // ---------- 渲染 ----------
+  function esc(s) { return String(s); }
+  function render() {
+    // 版本链 SVG
+    var svg = $('chain');
+    var n = S.versions.length;
+    var h = Math.max(460, 90 + n * 92);
+    svg.setAttribute('viewBox', '0 0 340 ' + h);
+    var out = '';
+    out += '<text x="14" y="22" fill="#94a3b8" font-size="12">行 row_1 的版本链（链头 = 最新版本）</text>';
+    for (var i = 0; i < n; i++) {
+      var v = S.versions[i];
+      var y = 44 + i * 92;
+      var isHit = (S.lastHit === i);
+      var stroke = !v.committed ? '#fbbf24' : (isHit ? '#34d399' : '#38bdf8');
+      var dash = v.committed ? '' : ' stroke-dasharray="5 4"';
+      var glow = isHit ? ' filter="url(#glow)"' : '';
+      out += '<g' + glow + '>';
+      out += '<rect x="60" y="' + y + '" width="220" height="62" rx="10" fill="#0b1220" stroke="' + stroke + '" stroke-width="2"' + dash + '/>';
+      out += '<text x="76" y="' + (y + 26) + '" fill="#e2e8f0" font-size="18" font-weight="700">v = ' + esc(v.value) + '</text>';
+      out += '<text x="76" y="' + (y + 48) + '" fill="#94a3b8" font-size="11">trx_id=' + esc(v.trx) + ' · ' +
+             (v.committed ? ('已提交#' + esc(v.commitClock)) : '未提交（只有 T1 自己可见）') + '</text>';
+      if (i === 0) out += '<text x="292" y="' + (y + 20) + '" fill="#f87171" font-size="10">链头</text>';
+      out += '</g>';
+      if (isHit) out += '<text x="14" y="' + (y + 36) + '" fill="#34d399" font-size="12">◀ T2 命中</text>';
+      if (i < n - 1) {
+        out += '<line x1="170" y1="' + (y + 62) + '" x2="170" y2="' + (y + 92) + '" stroke="#818cf8" stroke-width="2" marker-end="url(#arr)"/>';
+        out += '<text x="180" y="' + (y + 82) + '" fill="#818cf8" font-size="10">undo 指针</text>';
+      }
+    }
+    if (!n) out += '';
+    svg.innerHTML =
+      '<defs><marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">' +
+      '<path d="M0,0 L8,4 L0,8 z" fill="#818cf8"/></marker>' +
+      '<filter id="glow"><feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="#34d399" flood-opacity="0.8"/></filter></defs>' + out;
+
+    // 时间线
+    function drawTl(el, arr) {
+      if (!arr.length) { el.innerHTML = '<span class="ev" style="opacity:.4">（还没开始）</span>'; return; }
+      var h2 = '';
+      for (var i = 0; i < arr.length; i++) {
+        if (i) h2 += '<span class="arrow">→</span>';
+        var hit = String(arr[i]).indexOf('SELECT') === 0;
+        h2 += '<span class="ev' + (hit ? ' hit' : '') + '">' + esc(arr[i]) + '</span>';
+      }
+      el.innerHTML = h2;
+    }
+    drawTl($('tl1'), S.tl1);
+    drawTl($('tl2'), S.tl2);
+
+    // read view 面板
+    var vb = $('viewbox');
+    if (!S.t2) vb.innerHTML = 'T2 还没出生，没有 read view。';
+    else if (S.level === 'RR') {
+      vb.innerHTML = S.t2View
+        ? '<b>RR read view（钉死）</b>：snap=' + S.t2View.snap + '，self=' + S.t2.id +
+          ' —— 不管 T1 之后提交几次，这个框框里的世界不再变化。'
+        : 'RR：T2 还没做第一次读，read view 尚未建立。';
+    } else {
+      vb.innerHTML = '<b>RC</b>：没有常驻 read view，每条语句开始时现拍一个（snap = 当前提交时钟 ' + S.clock + '）。';
+    }
+
+    // 按钮可用性
+    $('b1').disabled = !!S.t1;
+    $('b2').disabled = !S.t1;
+    $('b3').disabled = !S.t1;
+    $('b4').disabled = !!S.t2;
+    $('b5').disabled = !S.t2;
+  }
+
+  // ---------- 自动播放 ----------
+  var AUTO = [
+    ['T1 开始', startT1, 900],
+    ['T1 更新', updateT1, 1200],
+    ['T2 开始', startT2, 900],
+    ['T2 第一次查询', queryT2, 1700],
+    ['T1 提交', commitT1, 1300],
+    ['T2 第二次查询', queryT2, 1700]
+  ];
+  function stopAuto() {
+    if (S.autoTimer) { clearInterval(S.autoTimer); S.autoTimer = null; }
+    $('bAuto').textContent = '▶ 自动播放';
+  }
+  function tick() {
+    if (S.autoStep >= AUTO.length) {
+      stopAuto();
+      explain('自动播放结束。现在是 <b>' + S.level + '</b>：' + (S.level === 'RC'
+        ? 'T2 第二次查询读到了 <b>901</b> —— 每条语句重拍快照，T1 的提交“插”进了两次读之间 → <b>不可重复读</b>。'
+        : 'T2 第二次查询还是 <b>100</b> —— read view 钉死在第一次读，T1 提交与我无关 → <b>可重复读</b>。'));
+      return;
+    }
+    var a = AUTO[S.autoStep++];
+    log('—— 自动：' + a[0] + ' ——', 'sys');
+    a[1]();
+    S.autoTimer = setTimeout(tick, a[2]);
+    // 为了按钮状态即时刷新，tick 内各事件已调 render()
+  }
+  function startAuto() {
+    if (S.autoTimer) { stopAuto(); return; }
+    reset();
+    $('bAuto').textContent = '■ 停止';
+    tick();
+  }
+
+  // ---------- 级别切换 ----------
+  function setLevel(lv) {
+    S.level = lv;
+    $('btnRC').className = lv === 'RC' ? 'on' : '';
+    $('btnRR').className = lv === 'RR' ? 'on' : '';
+    if (S.t2) S.t2View = null;         // 重来视角：让新级别从头生效
+    log('切换隔离级别 → ' + lv, 'sys');
+    explain(lv === 'RC'
+      ? '已切到 <b>READ COMMITTED</b>：read view 每条语句拍一次。T1 提交后，T2 下一条 SELECT 就能看到新值。'
+      : '已切到 <b>REPEATABLE READ</b>：read view 在 T2 第一次读时钉死。之后 T1 提交一万次，T2 看到的都是同一个世界。');
+    render();
+  }
+
+  function reset() {
+    var lv = S ? S.level : 'RC';
+    if (S && S.autoTimer) clearInterval(S.autoTimer);
+    S = fresh();
+    S.level = lv;
+    S.lastHit = -1;
+    $('log').innerHTML = '';
+    $('btnRC').className = lv === 'RC' ? 'on' : '';
+    $('btnRR').className = lv === 'RR' ? 'on' : '';
+    log('实验室已重置。基线版本：v=100，由建表事务 trx_id=10 写入并已提交。', 'sys');
+    render();
+  }
+
+  // ---------- 绑定 ----------
+  $('b1').onclick = function () { stopAuto(); startT1(); };
+  $('b2').onclick = function () { stopAuto(); updateT1(); };
+  $('b3').onclick = function () { stopAuto(); commitT1(); };
+  $('b4').onclick = function () { stopAuto(); startT2(); };
+  $('b5').onclick = function () { stopAuto(); queryT2(); };
+  $('bAuto').onclick = startAuto;
+  $('bReset').onclick = function () { stopAuto(); reset(); };
+  $('btnRC').onclick = function () { stopAuto(); setLevel('RC'); };
+  $('btnRR').onclick = function () { stopAuto(); setLevel('RR'); };
+
+  reset();
+})();
+</script>
+</body>
+</html>

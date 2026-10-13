@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LSM-Tree 交互动画 · 第 6 关 轻剑期</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface-2: #334155;
+    --ink: #f1f5f9;
+    --ink-muted: #94a3b8;
+    --ink-dim: #64748b;
+    --rule: #334155;
+    --accent: #38bdf8;
+    --accent-2: #818cf8;
+    --green: #34d399;
+    --amber: #fbbf24;
+    --red: #f87171;
+    --mono: "Consolas", "Cascadia Mono", "Courier New", ui-monospace, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                 "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+    font-size: 14px;
+    padding: 22px 18px 60px;
+  }
+  .wrap { max-width: 1320px; margin: 0 auto; }
+  .top { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 8px; }
+  .top h1 {
+    font-size: 1.45rem;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .top .crumb { font-size: 12px; color: var(--ink-dim); }
+  .top .crumb a { color: var(--accent); text-decoration: none; }
+  .caveat {
+    font-size: 12px; color: var(--ink-muted);
+    background: rgba(56,189,248,.06);
+    border: 1px solid var(--rule); border-left: 3px solid var(--accent);
+    border-radius: 0 9px 9px 0; padding: 8px 12px; margin-bottom: 14px;
+  }
+  .caveat code { font-family: var(--mono); color: var(--accent); }
+  .caveat b { color: var(--ink); }
+
+  .bar {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    background: var(--surface); border: 1px solid var(--rule);
+    border-radius: 12px; padding: 10px 14px; margin-bottom: 14px;
+  }
+  .bar .grp { display: flex; gap: 6px; align-items: center; }
+  .bar .sep { width: 1px; align-self: stretch; background: var(--rule); margin: 2px 4px; }
+  .bar label { font-size: 12px; color: var(--ink-muted); display: flex; gap: 4px; align-items: center; }
+  button {
+    background: var(--surface-2); color: var(--ink);
+    border: 1px solid var(--rule); border-radius: 8px;
+    padding: 5px 12px; font-size: 12.5px; cursor: pointer;
+    transition: background .15s, border-color .15s;
+  }
+  button:hover { background: #3d4c63; border-color: var(--accent); }
+  button.primary { background: rgba(56,189,248,.15); border-color: var(--accent); color: var(--accent); }
+  button.warn { background: rgba(251,191,36,.12); border-color: var(--amber); color: var(--amber); }
+  button.ghost { color: var(--ink-muted); }
+  input[type=text], input[type=number], select {
+    background: #0b1220; color: var(--ink);
+    border: 1px solid var(--rule); border-radius: 7px;
+    padding: 5px 8px; font-size: 12.5px; font-family: var(--mono);
+  }
+  input[type=number] { width: 84px; }
+  input[type=checkbox] { accent-color: var(--accent); }
+
+  .main { display: flex; gap: 14px; align-items: flex-start; }
+  .canvas {
+    flex: 1 1 auto; min-width: 0;
+    background: var(--surface); border: 1px solid var(--rule);
+    border-radius: 14px; padding: 8px;
+  }
+  .canvas svg { width: 100%; height: auto; display: block; }
+  .metrics {
+    flex: 0 0 308px;
+    background: var(--surface); border: 1px solid var(--rule);
+    border-radius: 14px; padding: 14px 16px;
+    font-size: 12.5px;
+  }
+  .metrics h2 { font-size: 13px; color: var(--accent); margin: 10px 0 6px; letter-spacing: .05em; }
+  .metrics h2:first-child { margin-top: 0; }
+  .mrow { display: flex; justify-content: space-between; gap: 8px; padding: 2.5px 0; color: var(--ink-muted); border-bottom: 1px dashed rgba(51,65,85,.5); }
+  .mrow:last-child { border-bottom: none; }
+  .mrow .v { font-family: var(--mono); color: var(--ink); text-align: right; }
+  .mrow .v.hl { color: var(--accent); }
+  .mrow .v.warnv { color: var(--amber); }
+  .qbox {
+    margin-top: 4px; padding: 8px 10px;
+    background: rgba(129,140,248,.08); border: 1px solid var(--rule);
+    border-radius: 9px; font-family: var(--mono); font-size: 11.5px;
+    color: var(--ink-muted); line-height: 1.7; min-height: 66px;
+  }
+  .qbox b.hit { color: var(--green); }
+  .qbox b.miss { color: var(--red); }
+  .qbox b.num { color: var(--accent); }
+  .footnote { margin-top: 10px; font-size: 11px; color: var(--ink-dim); line-height: 1.6; }
+
+  .explain {
+    margin-top: 14px;
+    background: var(--surface); border: 1px solid var(--rule);
+    border-left: 4px solid var(--amber);
+    border-radius: 0 12px 12px 0;
+    padding: 12px 16px; font-size: 13.5px; color: var(--ink);
+    min-height: 44px;
+  }
+  .explain code { font-family: var(--mono); color: var(--amber); }
+  .explain b { color: var(--accent); }
+
+  /* SVG 元素样式（类挂在 g 上，子元素继承描边/填充变化） */
+  svg text { font-family: var(--mono); }
+  svg .lvl-label { fill: var(--ink-muted); font-size: 14px; font-weight: bold; }
+  svg .lvl-sub { fill: var(--ink-dim); font-size: 10px; }
+  svg .seg-rect { fill: #24344d; stroke: var(--rule); stroke-width: 1.4; }
+  svg .l0.seg-rect { stroke: var(--accent); }
+  svg .l1.seg-rect { stroke: var(--accent-2); }
+  svg .l2.seg-rect { stroke: var(--green); }
+  svg .l3.seg-rect { stroke: var(--amber); }
+  svg .seg-t1 { fill: var(--ink-dim); font-size: 9px; }
+  svg .seg-t2 { fill: var(--ink); font-size: 10px; }
+  svg .seg-t3 { fill: var(--ink-muted); font-size: 9px; }
+  svg .box { fill: #16233c; stroke: var(--rule); stroke-width: 1.5; }
+  svg .box-t { fill: var(--ink); font-size: 12px; }
+  svg .box-s { fill: var(--ink-dim); font-size: 10px; }
+  svg .arrow { stroke: var(--ink-dim); stroke-width: 1.4; fill: none; marker-end: url(#arr); }
+  svg .arrow-t { fill: var(--ink-dim); font-size: 10px; }
+  svg .probe .seg-rect, svg .probe .box { stroke: var(--amber); fill: rgba(251,191,36,.14); }
+  svg .bloomskip .seg-rect { stroke: var(--red); fill: rgba(248,113,113,.06); opacity: .55; }
+  svg .hit .seg-rect, svg .hit .box { stroke: var(--green); fill: rgba(52,211,153,.16); }
+  svg .compin .seg-rect { stroke: var(--accent-2); stroke-dasharray: 5 3; fill: rgba(129,140,248,.10); }
+  svg .stalltag { fill: var(--red); font-size: 11px; font-weight: bold; }
+  @media (max-width: 980px) { .main { flex-direction: column; } .metrics { flex: 1 1 auto; width: 100%; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top">
+    <h1>LSM-Tree 交互动画 · memtable → flush → compaction</h1>
+    <div class="crumb"><a href="index.html">← 返回第 6 关目录</a> · 配套源码：<b>02_lsm_vs_btree.cpp</b></div>
+  </div>
+
+  <div class="caveat">
+    <b>口径与 02_lsm_vs_btree.cpp 完全一致：</b>key 形如 <code>user:%07d</code>（10 字节）、value 固定 40B，
+    SST 每条按 <code>key\tvalue\n</code> 记 <b>52B</b>；用户字节 = 每次 put 记 <b>50B</b>（覆盖写也记）；
+    <b>写放大 = 累计落盘字节(flush+compaction 全顺序写) ÷ 用户字节</b>；
+    <b>读放大 = 一次查询探测的段数</b>，另记「布隆放行」（真去翻文件）与「真读页数」（真读到数据）。
+    演示缩放：memtable 上限、L1 容量按<b>条数</b>可调（真实 LevelDB：memtable 4096 条、L1=4MB、每层 ×10；
+    因每条恒 52B，按条数与按字节等价）。查询顺序：<b>memtable → 冻结表 → L0 逐段（新在前）→ L1..L3</b>（L1 起先键范围筛，再问布隆）。
+  </div>
+
+  <div class="bar">
+    <div class="grp">
+      <label>key 编号 <input type="number" id="inKey" value="7" min="1" max="9999999"></label>
+      <button class="primary" id="btnPut">写入该 key</button>
+      <button id="btnRand">随机写入</button>
+      <button id="btnFill">连续写满触发 flush</button>
+      <button class="primary" id="btnGet">查询</button>
+    </div>
+    <div class="sep"></div>
+    <div class="grp">
+      <label>compaction 源层
+        <select id="selSrc"><option value="0">L0 → L1</option><option value="1">L1 → L2</option><option value="2">L2 → L3</option></select>
+      </label>
+      <button class="warn" id="btnCompact">触发一次 compaction</button>
+    </div>
+    <div class="sep"></div>
+    <div class="grp">
+      <button class="primary" id="btnPlay">▶ 自动播放</button>
+      <button id="btnStep">单步</button>
+      <button class="ghost" id="btnReset">重置</button>
+      <label>速度
+        <select id="selSpeed"><option value="800">慢</option><option value="420" selected>中</option><option value="180">快</option></select>
+      </label>
+    </div>
+    <div class="sep"></div>
+    <div class="grp">
+      <label>memLimit <select id="selMem"><option>4</option><option selected>8</option><option>12</option></select></label>
+      <label>L1 容量(条) <select id="selCap"><option>16</option><option selected>24</option><option>32</option></select></label>
+      <label><input type="checkbox" id="chkBloom" checked> 布隆过滤器</label>
+      <label><input type="checkbox" id="chkStall"> 模拟 compaction 跟不上</label>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="canvas" id="canvas"></div>
+
+    <div class="metrics">
+      <h2>◆ 形状</h2>
+      <div id="mShape"></div>
+      <h2>◆ 写账（与 02 同口径）</h2>
+      <div id="mWrite"></div>
+      <h2>◆ 读账（累计）</h2>
+      <div id="mRead"></div>
+      <h2>◆ 本次查询（读放大）</h2>
+      <div class="qbox" id="mQuery">尚未查询。写几个 key 后，试试查一个<b>不存在</b>的编号，看布隆怎么拦段。</div>
+      <div class="footnote">
+        真读页数只在「布隆放行且键确实在本段」时 +1（02 里 probeSST 命中才算读中数据）。
+        布隆说「肯定没有」的段：算 1 次探测、不算放行、<b>零磁盘 IO</b>。
+        memtable / 冻结表命中 = 零探测零 IO。L1 起键范围不符的段跳过，连探测都不算（元数据在内存，免费）。
+      </div>
+    </div>
+  </div>
+
+  <div class="explain" id="explain">老师傅开场：先点「连续写满触发 flush」，看 memtable 怎么冻结、顺序落成 L0 的第一段。</div>
+</div>
+
+<script>
+'use strict';
+/* =====================================================================
+   LSM-Tree 教学动画 —— 状态机 + 步骤队列
+   口径全部对齐 02_lsm_vs_btree.cpp：
+   - put：userBytes += 50；memtable 满 memLimit 条 → 冻结 → flush
+   - flush：整段顺序写 1 个 L0 SSTable（52B/条），插到 L0 最前（查询先撞最新的）
+   - 触发：L0 段数 >= l0Fanout(=4) → L0→L1；L1 条数 > 容量 → L1→L2（每层 ×10，连锁下压）
+   - compaction：输入 = src 全段 + dst 范围重叠段；k 路归并（键小先出，同键输入序
+     靠前=更新 的先出并保留），旧段报废，输出按 dst 容量切段顺序写
+   - get：memtable → 冻结表 → L0 逐段（新在前）→ L1..L3（先键范围筛）；记 probes / 布隆放行 / 真读页数
+   - 布隆：每元素 10 bit（至少 64），双哈希 h1/h2
+   ===================================================================== */
+
+var BYTES_PER_KV = 52;   // key(10) + '\t'(1) + value(40) + '\n'(1)
+var USER_PER_PUT = 50;   // key(10) + value(40)
+
+var S = null;
+var timer = null;
+
+function freshState() {
+  return {
+    memLimit: parseInt(document.getElementById('selMem').value, 10),
+    l0Fanout: 4,
+    capL1: parseInt(document.getElementById('selCap').value, 10),
+    useBloom: document.getElementById('chkBloom').checked,
+    stallSim: document.getElementById('chkStall').checked,
+    mem: {},                       // key -> version（skiplist 模拟：有序）
+    imm: null,                     // 冻结表 [{k,v}] 有序，或 null
+    levels: [[], [], [], []],      // L0..L3
+    segId: 0, ver: 0, nextSeq: 1, putCount: 0,
+    userBytes: 0, bytesWritten: 0,
+    flushCount: 0, compactionCount: 0,
+    probes: 0, bloomPassed: 0, reads: 0,
+    q: null,                       // 进行中的查询 {key,probes,passed,reads}
+    lastQ: null,                   // 上次查询结果
+    compIn: {},                    // compaction 输入段 id 集合
+    hl: null,                      // 瞬时高亮 {type:'seg'|'mem'|'imm', id, cls}
+    hitMark: null,                 // 持久命中 {type, id}
+    queue: [], writing: false, paused: false
+  };
+}
+
+/* ---------- 小工具 ---------- */
+function pad7(n) { var s = '' + n; while (s.length < 7) s = '0' + s; return s; }
+function keyOf(n) { return 'user:' + pad7(n); }
+function shortOf(k) { return k.slice(5); }
+function fmtB(b) { return b >= 1024 ? (b / 1024).toFixed(2) + ' KB' : b + ' B'; }
+function memCount() { return Object.keys(S.mem).length; }
+function sortedMem() {
+  var ks = Object.keys(S.mem).sort();
+  return ks.map(function (k) { return { k: k, v: S.mem[k] }; });
+}
+function levelKeys(lv) {
+  var n = 0; S.levels[lv].forEach(function (s) { n += s.count; }); return n;
+}
+function capKeys(lv) { // L1=capL1，每层 ×10（条数口径，与 02 的字节口径等价缩放）
+  if (lv <= 0) return Infinity;
+  var c = S.capL1;
+  for (var i = 2; i <= lv; i++) c *= 10;
+  return c;
+}
+function capBytes(lv) { return capKeys(lv) * BYTES_PER_KV; }
+function wamp() { return S.putCount ? (S.bytesWritten / (S.putCount * USER_PER_PUT)).toFixed(2) + 'x' : '—'; }
+
+/* ---------- 布隆（双哈希，10 bit/元素，约 1% 误判） ---------- */
+function fnv(s) {
+  var h = 0x811c9dc5;
+  for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  return h >>> 0;
+}
+function h2(s) { return (Math.imul(fnv(s), 0x9E3779B9) + 12345) >>> 0; }
+function bloomBuild(kvs) {
+  var m = Math.max(kvs.length * 10, 64);
+  var bits = new Uint8Array(m);
+  for (var i = 0; i < kvs.length; i++) {
+    bits[fnv(kvs[i].k) % m] = 1;
+    bits[h2(kvs[i].k) % m] = 1;
+  }
+  return { bits: bits, m: m };
+}
+function bloomMaybe(seg, k) { return !!(seg.bloom.bits[fnv(k) % seg.bloom.m] && seg.bloom.bits[h2(k) % seg.bloom.m]); }
+function segHas(seg, k) {
+  for (var i = 0; i < seg.kvs.length; i++) if (seg.kvs[i].k === k) return true;
+  return false;
+}
+
+function makeSeg(lv, kvs) { // kvs 必须已按 key 升序
+  var seg = {
+    id: ++S.segId, level: lv, kvs: kvs, count: kvs.length,
+    bytes: kvs.length * BYTES_PER_KV,
+    minKey: kvs[0].k, maxKey: kvs[kvs.length - 1].k
+  };
+  seg.bloom = bloomBuild(kvs);
+  return seg;
+}
+
+/* ---------- 步骤队列 ---------- */
+function pushStep(fn) { S.queue.push(fn); }
+function runNext() { var fn = S.queue.shift(); if (fn) fn(); }
+function pump() {
+  if (S.paused) return;
+  if (S.queue.length) { runNext(); return; }
+  if (S.writing) enqueuePut(randomKey());
+}
+function explain(html) { document.getElementById('explain').innerHTML = html; }
+
+/* ---------- 写路径 ---------- */
+function randomKey() {
+  var hi = Math.max(S.nextSeq + 8, 30);
+  var n = 1 + Math.floor(Math.random() * hi);
+  if (n >= S.nextSeq) S.nextSeq = n + 1;
+  return keyOf(n);
+}
+function isStalled() { return S.stallSim && S.levels[0].length >= S.l0Fanout + 2; }
+
+function enqueuePut(k) {
+  pushStep(function () {
+    if (isStalled()) {
+      explain('<b>write stall：</b>L0 已堆到 ' + S.levels[0].length + ' 段（远超阈值 ' + S.l0Fanout +
+        '），引擎<b>暂停你的写入</b>——02 结论四说的就是这个。手动触发一次 L0→L1 compaction 把它压下去。');
+      render(); return;
+    }
+    var over = S.mem[k] !== undefined;
+    S.ver++; S.mem[k] = S.ver;
+    S.putCount++; S.userBytes += USER_PER_PUT;   // 覆盖写也记用户字节（与 02 一致）
+    S.hl = { type: 'mem', cls: 'probe' };
+    render();
+    explain('写入 <code>' + k + '</code>（v' + S.ver + '）：只进 memtable，<b>零磁盘 IO</b>——LSM 写快就快在这。' +
+      (over ? '这是<b>覆盖写</b>：同 key 新值赢，条数不涨，但用户字节照记 50B。' : '') +
+      ' memtable ' + memCount() + '/' + S.memLimit + ' 条。');
+    if (memCount() >= S.memLimit) { pushStep(freezeStep); pushStep(flushStep); pushStep(cascadeStep); }
+  });
+}
+
+function freezeStep() {
+  if (!memCount()) return;
+  S.imm = sortedMem();
+  S.mem = {};
+  S.hl = { type: 'imm', cls: 'probe' };
+  render();
+  explain('memtable 攒满 ' + S.imm.length + ' 条 → <b>冻结成 immutable memtable</b>，同时开一张新表继续接写入。' +
+    '（02 把冻结和 flush 合在一步写；真实引擎 like LevelDB/RocksDB 是两张表倒着用，冻结期间写入不堵。）');
+}
+
+function flushStep() {
+  if (!S.imm) return;
+  var seg = makeSeg(0, S.imm);
+  S.levels[0].unshift(seg);           // 新的插到最前：查询先撞最新的
+  S.bytesWritten += seg.bytes;        // 整段顺序写，全记落盘账
+  S.flushCount++;
+  S.imm = null;
+  S.hl = { type: 'seg', id: seg.id, cls: 'probe' };
+  render();
+  explain('<b>flush：</b>冻结表本来就有序（skiplist/map 顺序吐出），<b>整段顺序写</b>成 1 个 L0 SSTable：' +
+    seg.count + ' 条 × 52B = ' + fmtB(seg.bytes) + '，插到 L0 最前。' +
+    '累计写放大 = ' + fmtB(S.bytesWritten) + ' ÷ ' + fmtB(S.putCount * USER_PER_PUT) + ' = <b>' + wamp() + '</b>。');
+}
+
+/* ---------- compaction ---------- */
+function findTrigger() {
+  if (S.stallSim) return null;   // 「跟不上」模式：自动合并停摆，只许手动
+  if (S.levels[0].length >= S.l0Fanout) return { src: 0, dst: 1 };
+  for (var lv = 1; lv <= 2; lv++) if (levelKeys(lv) > capKeys(lv)) return { src: lv, dst: lv + 1 };
+  return null;
+}
+function cascadeStep() {
+  var t = findTrigger();
+  if (!t) return;
+  enqueueCompact(t.src, t.dst, false);
+}
+
+function collectInputs(src, dst) {
+  var inputs = [], lo = null, hi = null, keepDst = [];
+  S.levels[src].forEach(function (s) {
+    inputs.push(s);
+    if (lo === null) { lo = s.minKey; hi = s.maxKey; }
+    else { if (s.minKey < lo) lo = s.minKey; if (s.maxKey > hi) hi = s.maxKey; }
+  });
+  if (!inputs.length) return null;
+  S.levels[dst].forEach(function (s) {
+    if (s.maxKey < lo || s.minKey > hi) keepDst.push(s);  // 键范围不相交，不动它
+    else inputs.push(s);
+  });
+  return { src: src, dst: dst, inputs: inputs, keepDst: keepDst };
+}
+
+function enqueueCompact(src, dst, forced) {
+  var pack = null;
+  pushStep(function () {  // 步骤 A：圈定输入
+    pack = collectInputs(src, dst);
+    if (!pack) { explain('L' + src + ' 是空的，这次 compaction 无事可做。'); return; }
+    S.compIn = {};
+    var tot = 0;
+    pack.inputs.forEach(function (s) { S.compIn[s.id] = 1; tot += s.count; });
+    S.hl = null;
+    render();
+    explain((forced ? '<b>手动</b>触发：' : '自动触发：') +
+      (src === 0 ? 'L0 段数达到 ' + S.levels[0].length + '（阈值 ' + S.l0Fanout + '）'
+                 : 'L' + src + ' 条数 ' + levelKeys(src) + ' 超过容量 ' + capKeys(src)) +
+      ' → 与 L' + dst + ' 做 <b>k 路归并</b>：' + pack.inputs.length + ' 个输入段共 <b>' + tot +
+      ' 条</b>要全读一遍——这就是 compaction 的读账（虚线段即输入）。');
+  });
+  pushStep(function () {  // 步骤 B：归并落盘
+    if (!pack) return;
+    var items = [];
+    pack.inputs.forEach(function (s, o) {
+      s.kvs.forEach(function (kv) { items.push({ k: kv.k, v: kv.v, o: o }); });
+    });
+    // 等价 02 的小顶堆：键小先出；同键输入序靠前（更新）先出并保留
+    items.sort(function (a, b) { return a.k < b.k ? -1 : a.k > b.k ? 1 : a.o - b.o; });
+    var merged = [], last = null, dup = 0;
+    items.forEach(function (it) {
+      if (it.k === last) { dup++; return; }
+      last = it.k; merged.push({ k: it.k, v: it.v });
+    });
+    var dropped = pack.inputs.length;
+    S.levels[pack.src] = [];                       // src 层输入段全部报废
+    var newSegs = [], buf = [], bufB = 0;
+    var lim = capBytes(pack.dst);
+    function cut() { if (!buf.length) return; newSegs.push(makeSeg(pack.dst, buf)); buf = []; bufB = 0; }
+    merged.forEach(function (kv) { buf.push(kv); bufB += BYTES_PER_KV; if (bufB >= lim) cut(); });
+    cut();
+    S.bytesWritten += merged.length * BYTES_PER_KV;  // 重写全记落盘账
+    S.compactionCount++;
+    var dstLevel = pack.keepDst.concat(newSegs);     // dst 层不重叠段保留 + 新段
+    dstLevel.sort(function (a, b) { return a.minKey < b.minKey ? -1 : 1; });
+    S.levels[pack.dst] = dstLevel;
+    S.compIn = {};
+    S.hl = newSegs.length ? { type: 'seg', id: newSegs[0].id, cls: 'probe' } : null;
+    render();
+    explain('<b>compaction 完成：</b>L' + pack.src + ' → L' + pack.dst + '，重写 <b>' + merged.length + ' 条</b>（' +
+      fmtB(merged.length * BYTES_PER_KV) + ' 顺序写；同键新值赢，丢掉 ' + dup + ' 个旧版本），' +
+      dropped + ' 个旧段<b>报废</b>——重写+报废就是<b>写放大的大头</b>。当前写放大 <b>' + wamp() + '</b>。');
+    pushStep(cascadeStep);   // 连锁反应：下一层被撑爆就继续往下压
+  });
+}
+
+/* ---------- 查询路径（读放大走位） ---------- */
+function enqueueQuery(k) {
+  if (S.q) { explain('上一个查询还在走位，等它结束（或点重置）再查。'); return; }
+  pushStep(function () {
+    S.q = { key: k, probes: 0, passed: 0, reads: 0 };
+    S.lastQ = null;
+    S.hitMark = null;
+    if (S.mem[k] !== undefined) {          // memtable 命中：零探测零 IO
+      S.hitMark = { type: 'mem' };
+      S.hl = { type: 'mem', cls: 'hit' };
+      S.lastQ = { key: k, probes: 0, passed: 0, reads: 0, hit: 'memtable' };
+      S.q = null;
+      render();
+      explain('查询 <code>' + k + '</code>：<b>memtable 命中，零探测零磁盘 IO</b>。刚写的 key 最便宜——这是 LSM「有时读也快」的那一面。');
+      return;
+    }
+    S.hl = { type: 'mem', cls: 'probe' };
+    render();
+    explain('查询 <code>' + k + '</code>：memtable 没有 → 按 <b>冻结表 → L0(新在前) → L1 → L2</b> 顺序探测，盯紧右侧计数怎么跳。');
+    pushStep(S.imm ? qImmStep : qL0(0));
+  });
+}
+function qImmStep() {
+  if (!S.q) return;
+  var found = false;
+  for (var i = 0; i < S.imm.length; i++) if (S.imm[i].k === S.q.key) { found = true; break; }
+  if (found) {
+    S.hitMark = { type: 'imm' };
+    S.hl = { type: 'imm', cls: 'hit' };
+    S.lastQ = { key: S.q.key, probes: 0, passed: 0, reads: 0, hit: 'immutable memtable' };
+    S.q = null;
+    render();
+    explain('查询 <code>' + S.lastQ.key + '</code>：<b>冻结表命中</b>——它还在内存里，零探测零磁盘 IO。flush 前的窗口期就靠它兜住「读己之写」。');
+    return;
+  }
+  S.hl = { type: 'imm', cls: 'probe' };
+  render();
+  pushStep(qL0(0));
+}
+/* 探测一个段：算 1 次探测；布隆放行才算真翻文件；键在段里才算真读 1 页。
+   续步由调用方预先排好（命中时 S.q 清空，后续排队步骤自行退出）。 */
+function probeSegStep(seg) {
+  return function () {
+    var q = S.q; if (!q) return;
+    q.probes++; S.probes++;
+    var pass = !S.useBloom || bloomMaybe(seg, q.key);
+    if (pass) { q.passed++; S.bloomPassed++; }
+    if (pass && segHas(seg, q.key)) {
+      q.reads++; S.reads++;
+      S.hitMark = { type: 'seg', id: seg.id };
+      S.hl = { type: 'seg', id: seg.id, cls: 'hit' };
+      S.lastQ = { key: q.key, probes: q.probes, passed: q.passed, reads: q.reads, hit: 'L' + seg.level + ' 段 #' + seg.id };
+      S.q = null;
+      render();
+      explain('查询 <code>' + q.key + '</code>：在 <b>L' + seg.level + ' 的 #' + seg.id + ' 段命中</b>，停下。本次共探测 <b>' +
+        q.probes + '</b> 段、布隆放行 <b>' + q.passed + '</b> 段、真读 <b>' + q.reads +
+        '</b> 页——读放大就是你刚看见的这段走位。');
+      return;
+    }
+    S.hl = { type: 'seg', id: seg.id, cls: pass ? 'probe' : 'bloomskip' };
+    render();
+  };
+}
+function qL0(i) {
+  return function () {
+    if (!S.q) return;
+    if (i >= S.levels[0].length) { pushStep(qLv(1, 0)); return; }
+    pushStep(qL0(i + 1));
+    probeSegStep(S.levels[0][i])();
+  };
+}
+function qLv(lv, i) {
+  return function () {
+    if (!S.q) return;
+    if (lv > 3) { missFinish(); return; }
+    var segs = S.levels[lv];
+    while (i < segs.length && (S.q.key < segs[i].minKey || S.q.key > segs[i].maxKey)) i++; // 范围筛：免费
+    if (i >= segs.length) { pushStep(qLv(lv + 1, 0)); return; }
+    pushStep(qLv(lv, i + 1));
+    probeSegStep(segs[i])();
+  };
+}
+function missFinish() {
+  var q = S.q; if (!q) return;
+  S.lastQ = { key: q.key, probes: q.probes, passed: q.passed, reads: 0, hit: null };
+  S.q = null; S.hl = null;
+  render();
+  explain('查询 <code>' + q.key + '</code>：<b>查无此键</b>。共探测 <b>' + q.probes + '</b> 段、布隆放行 <b>' + q.passed +
+    '</b> 段——布隆替你砍掉了 <b>' + (q.probes - q.passed) + '</b> 次磁盘访问。查不存在的键最亏，全靠布隆兜底；把「布隆过滤器」勾掉再查一次，对比放行数。');
+}
+
+/* ---------- 指标 ---------- */
+function row(k, v, cls) {
+  return '<div class="mrow"><span>' + k + '</span><span class="v ' + (cls || '') + '">' + v + '</span></div>';
+}
+function renderMetrics() {
+  var sh = '';
+  sh += row('memtable（有序）', memCount() + ' / ' + S.memLimit + ' 条', memCount() >= S.memLimit ? 'warnv' : '');
+  sh += row('冻结表 immutable', S.imm ? S.imm.length + ' 条 · 待 flush' : '空闲', S.imm ? 'warnv' : '');
+  sh += row('L0（段可重叠）', S.levels[0].length + ' 段（≥' + S.l0Fanout + ' 触发）', S.levels[0].length >= S.l0Fanout ? 'warnv' : '');
+  for (var lv = 1; lv <= 3; lv++) {
+    var n = levelKeys(lv);
+    sh += row('L' + lv + '（层内不重叠）', S.levels[lv].length + ' 段 · ' + n + ' / ≤' + capKeys(lv) + ' 条', n > capKeys(lv) ? 'warnv' : '');
+  }
+  if (isStalled()) sh += row('<b style="color:#f87171">WRITE STALL</b>', '写入已暂停', 'warnv');
+  document.getElementById('mShape').innerHTML = sh;
+
+  var w = '';
+  w += row('put 次数', S.putCount + ' 次');
+  w += row('用户字节 userBytes', fmtB(S.putCount * USER_PER_PUT));
+  w += row('落盘字节 bytesWritten', fmtB(S.bytesWritten));
+  w += row('<b>写放大</b> = 落盘÷用户', wamp(), 'hl');
+  w += row('flush 次数', S.flushCount + ' 次');
+  w += row('compaction 次数', S.compactionCount + ' 次');
+  document.getElementById('mWrite').innerHTML = w;
+
+  var r = '';
+  r += row('累计探测段数 probes', S.probes);
+  r += row('布隆放行 bloomPassed', S.bloomPassed);
+  r += row('真读页数 dataPageReads', S.reads);
+  document.getElementById('mRead').innerHTML = r;
+
+  var qb = document.getElementById('mQuery');
+  if (S.q) {
+    qb.innerHTML = '查询 <b class="num">' + S.q.key + '</b> 进行中…<br>已探测 <b class="num">' + S.q.probes +
+      '</b> 段 · 放行 <b class="num">' + S.q.passed + '</b> · 真读 <b class="num">' + S.q.reads + '</b>';
+  } else if (S.lastQ) {
+    var t = S.lastQ.hit ? '命中 <b class="hit">' + S.lastQ.hit + '</b>' : '<b class="miss">查无此键</b>';
+    qb.innerHTML = '<b class="num">' + S.lastQ.key + '</b> → ' + t + '<br>读放大：探测 <b class="num">' +
+      S.lastQ.probes + '</b> 段 · 布隆放行 <b class="num">' + S.lastQ.passed +
+      '</b> · 真读 <b class="num">' + S.lastQ.reads + '</b> 页';
+  }
+}
+
+/* ---------- 场景渲染（字符串拼 SVG，零依赖） ---------- */
+function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function clsFor(ref) {
+  if (ref.id && S.compIn[ref.id]) return 'compin';
+  if (S.hitMark && ref.type === S.hitMark.type && (ref.type !== 'seg' || ref.id === S.hitMark.id)) return 'hit';
+  if (S.hl && S.hl.type === ref.type && (ref.type !== 'seg' || S.hl.id === ref.id)) return S.hl.cls;
+  return '';
+}
+function renderScene() {
+  var s = '<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">' +
+          '<path d="M0 0 L10 5 L0 10 z" fill="#64748b"></path></marker></defs>';
+
+  /* memtable / 冻结表 */
+  s += '<g class="' + clsFor({ type: 'mem' }) + '">' +
+       '<rect x="110" y="14" width="330" height="92" class="box" rx="10"></rect>' +
+       '<text x="126" y="36" class="box-t">memtable（skiplist 模拟 · 有序）</text>' +
+       '<text x="126" y="56" class="box-s">' + memCount() + ' / ' + S.memLimit + ' 条 · 写它 = 零磁盘 IO</text>' +
+       '<text x="126" y="76" class="box-s">' + esc(Object.keys(S.mem).sort().slice(0, 5).map(shortOf).join('  ') || '（空）') + '</text>' +
+       '</g>';
+  s += '<g class="' + clsFor({ type: 'imm' }) + '">' +
+       '<rect x="560" y="14" width="330" height="92" class="box" rx="10"></rect>' +
+       '<text x="576" y="36" class="box-t">immutable memtable（冻结表）</text>' +
+       '<text x="576" y="56" class="box-s">' + (S.imm ? S.imm.length + ' 条 · 下一步 flush 成 L0 段' : '（空闲，等待下一次冻结）') + '</text>' +
+       '</g>';
+  s += '<path d="M 440 60 L 552 60" class="arrow"></path><text x="452" y="52" class="arrow-t">攒满冻结</text>' +
+       '<path d="M 640 108 C 600 140 400 132 300 146" class="arrow"></path><text x="420" y="136" class="arrow-t">flush：整段顺序写 1 个 SSTable</text>';
+
+  /* L0..L3 */
+  var rowY = [152, 250, 348, 446];
+  var capHint = ['段数 ≥ ' + S.l0Fanout + ' 触发', '≤ ' + capKeys(1) + ' 条（缩放）', '≤ ' + capKeys(2) + ' 条', '≤ ' + capKeys(3) + ' 条'];
+  for (var lv = 0; lv <= 3; lv++) {
+    s += '<text x="12" y="' + (rowY[lv] + 26) + '" class="lvl-label">L' + lv + '</text>' +
+         '<text x="12" y="' + (rowY[lv] + 42) + '" class="lvl-sub">' + S.levels[lv].length + ' 段</text>' +
+         '<text x="12" y="' + (rowY[lv] + 56) + '" class="lvl-sub">' + capHint[lv] + '</text>';
+    if (lv === 0) s += '<text x="12" y="' + (rowY[lv] + 70) + '" class="lvl-sub">新段插最前</text>';
+    if (lv === 0 && isStalled()) s += '<text x="124" y="' + (rowY[lv] - 8) + '" class="stalltag">⚠ write stall：L0 堆积，写入已暂停</text>';
+    var x = 118;
+    S.levels[lv].forEach(function (seg, idx) {
+      var w = Math.min(168, Math.max(88, seg.count * 5 + 56));
+      if (x + w > 992) w = Math.max(60, 992 - x);
+      s += '<g class="' + clsFor({ type: 'seg', id: seg.id }) + '">' +
+           '<rect x="' + x + '" y="' + rowY[lv] + '" width="' + w + '" height="66" class="seg-rect l' + lv + '" rx="6"></rect>' +
+           '<text x="' + (x + 8) + '" y="' + (rowY[lv] + 16) + '" class="seg-t1">#' + seg.id + (lv === 0 && idx === 0 ? ' ·最新' : '') + '</text>' +
+           '<text x="' + (x + 8) + '" y="' + (rowY[lv] + 33) + '" class="seg-t2">' + esc(shortOf(seg.minKey) + '–' + shortOf(seg.maxKey)) + '</text>' +
+           '<text x="' + (x + 8) + '" y="' + (rowY[lv] + 50) + '" class="seg-t3">' + seg.count + ' 条 · ' + fmtB(seg.bytes) + '</text>' +
+           '</g>';
+      x += w + 10;
+    });
+    if (!S.levels[lv].length) s += '<text x="124" y="' + (rowY[lv] + 38) + '" class="lvl-sub">（空）</text>';
+  }
+  document.getElementById('canvas').innerHTML = '<svg viewBox="0 0 1000 528">' + s + '</svg>';
+}
+function render() { renderMetrics(); renderScene(); }
+
+/* ---------- 控件接线 ---------- */
+function inputKey() {
+  var v = parseInt(document.getElementById('inKey').value, 10);
+  if (isNaN(v) || v < 1 || v > 9999999) { explain('key 编号得是 1 ~ 9999999 的整数——它会拼成 <code>user:%07d</code>，和 02 一样。'); return null; }
+  return keyOf(v);
+}
+function restartTimer() {
+  if (timer) clearInterval(timer);
+  timer = setInterval(pump, parseInt(document.getElementById('selSpeed').value, 10));
+}
+
+document.getElementById('btnPut').onclick = function () { var k = inputKey(); if (k) enqueuePut(k); };
+document.getElementById('btnGet').onclick = function () { var k = inputKey(); if (k) enqueueQuery(k); };
+document.getElementById('btnRand').onclick = function () { enqueuePut(randomKey()); };
+document.getElementById('btnFill').onclick = function () {
+  var n = Math.max(1, S.memLimit - memCount());
+  for (var i = 0; i < n; i++) enqueuePut(keyOf(S.nextSeq++));
+  explain('排队连写 ' + n + ' 条新 key，正好写满 memtable——最后一条会接上「冻结 → flush → 检查触发」三连。');
+};
+document.getElementById('btnCompact').onclick = function () {
+  var src = parseInt(document.getElementById('selSrc').value, 10);
+  if (!S.levels[src].length) { explain('L' + src + ' 现在是空的，先写点数据再触发 compaction。'); return; }
+  enqueueCompact(src, src + 1, true);
+};
+document.getElementById('btnPlay').onclick = function () {
+  S.writing = !S.writing;
+  S.paused = false;
+  document.getElementById('btnPlay').textContent = S.writing ? '⏸ 暂停' : '▶ 自动播放';
+  if (S.writing) explain('自动播放：随机写 key（编号偶尔撞上老 key，正好练「同键新值赢」与覆盖写记账）。再点一次暂停。');
+};
+document.getElementById('btnStep').onclick = function () {
+  if (!S.queue.length) { explain('队列是空的——先点某个按钮攒出步骤，再「单步」逐帧看。'); return; }
+  S.writing = false;
+  document.getElementById('btnPlay').textContent = '▶ 自动播放';
+  S.paused = true;      // 跑完这一步继续暂停，逐帧观察
+  runNext();
+};
+document.getElementById('btnReset').onclick = function () {
+  S = freshState();
+  document.getElementById('btnPlay').textContent = '▶ 自动播放';
+  explain('已重置。口径回顾：写放大 = 落盘字节 ÷ 用户字节；读放大 = 探测段数（另有布隆放行 / 真读页数）。');
+  render();
+};
+document.getElementById('selSpeed').onchange = restartTimer;
+document.getElementById('selMem').onchange = function () {
+  S.memLimit = parseInt(this.value, 10); render();
+  explain('memLimit 改为 ' + S.memLimit + ' 条（02 演示一用的是 30，真实默认 4096 条）。');
+};
+document.getElementById('selCap').onchange = function () {
+  S.capL1 = parseInt(this.value, 10); render();
+  explain('L1 容量改为 ' + S.capL1 + ' 条，每层 ×10 递增（真实 LevelDB：L1=4MB、每层 ×10）。');
+};
+document.getElementById('chkBloom').onchange = function () {
+  S.useBloom = this.checked;
+  explain(this.checked
+    ? '布隆过滤器<b>开</b>：每元素 10 bit、双哈希（02 的 Bloom 同款），说「肯定没有」就零 IO 跳过，约 1% 误判放行、绝不漏判。'
+    : '布隆过滤器<b>关</b>：相当于 02 里 setUseBloom(false)——凡键范围匹配的段都要真去翻文件，查不存在的键会一路翻到底，读放大立刻难看。');
+};
+document.getElementById('chkStall').onchange = function () {
+  S.stallSim = this.checked; render();
+  explain(this.checked
+    ? '「compaction 跟不上」已开：自动合并停摆，L0 堆过 ' + (S.l0Fanout + 2) + ' 段就 <b>write stall</b> 暂停写入——compaction 不免费，抢不过前台就得刹车。'
+    : '恢复正常：flush / compaction 按阈值自动连锁下压（L0 满→压 L1，L1 超→压 L2……）。');
+};
+
+/* ---------- 启动 ---------- */
+S = freshState();
+restartTimer();
+render();
+</script>
+</body>
+</html>

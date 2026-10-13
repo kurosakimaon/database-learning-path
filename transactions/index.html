@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第 3 关 · 心法期 · 事务与 ACID</title>
+<style>
+  :root {
+    --bg: #0f172a; --bg2: #1e293b; --line: #334155;
+    --ink: #e2e8f0; --dim: #94a3b8;
+    --blue: #38bdf8; --indigo: #818cf8; --green: #34d399; --amber: #fbbf24;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 15px/1.7 "Segoe UI", "Microsoft YaHei", sans-serif;
+    max-width: 900px; margin: 0 auto; padding: 36px 22px 80px;
+  }
+  .crumb { color: var(--dim); font-size: 13px; margin-bottom: 8px; }
+  h1 { font-size: 26px; margin-bottom: 6px; }
+  h1 .lv { color: var(--blue); }
+  .lead { color: var(--dim); margin-bottom: 26px; }
+  h2 { font-size: 18px; color: var(--indigo); margin: 30px 0 12px; }
+  .card {
+    background: var(--bg2); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px 18px; margin-bottom: 10px;
+  }
+  .card b.file { color: var(--blue); font-family: Consolas, monospace; font-size: 14px; }
+  .card .why { color: var(--dim); font-size: 13.5px; margin-top: 3px; }
+  .card code {
+    background: #0b1220; border: 1px solid var(--line); border-radius: 6px;
+    padding: 1px 7px; font-family: Consolas, monospace; font-size: 12.5px; color: #a5f3fc;
+  }
+  .cmd { display: block; margin-top: 8px; }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 6px; }
+  th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; }
+  th { color: var(--dim); background: #16223a; }
+  .ok { color: var(--green); } .no { color: #f87171; }
+  .note {
+    border-left: 3px solid var(--amber); background: #1a2236;
+    padding: 10px 14px; border-radius: 0 10px 10px 0; color: #fde68a; font-size: 14px;
+  }
+  .foot { margin-top: 40px; color: var(--dim); font-size: 13px; border-top: 1px solid var(--line); padding-top: 14px; }
+</style>
+</head>
+<body>
+<div class="crumb">database-learning-path › 第 3 关</div>
+<h1><span class="lv">心法期</span> · 事务与 ACID</h1>
+<p class="lead">接口只有四个词：BEGIN / COMMIT / ROLLBACK / SAVEPOINT。<br>
+这一关让你在真线程、真锁、真页缓存里，把事务的每种死法都亲手过一遍。</p>
+
+<div class="note">学法约定：每个 .cpp 都必须自己编译运行；输出里的毫秒时间线是灵魂 —— 交错是真实发生的，不是画出来的。</div>
+
+<h2>学习路线（按顺序，别跳）</h2>
+<div class="card">
+  <b class="file">01_acid_in_sqlite.sql</b> —— 用 SQL 亲手验证 ACID<br>
+  显式事务、ROLLBACK、SAVEPOINT 部分回滚、WAL 模式、两个会话互相锁门。<br>
+  <span class="why">重点感受：COMMIT 之前一切都还是「租的」，ROLLBACK 一键退还。</span>
+  <code class="cmd">sqlite3 :memory: ".read 01_acid_in_sqlite.sql"</code>
+</div>
+<div class="card">
+  <b class="file">02_transaction_raii.cpp</b> —— 把事务装进析构函数<br>
+  RAII 事务类 + SQLITE_BUSY 指数退避重试 + 两线程写同一行。<br>
+  <span class="why">重点感受：BUSY 不是失败是「待会儿再来」，吞掉 BUSY = 悄悄丢更新。</span>
+  <code class="cmd">g++ -std=c++17 -O2 02_transaction_raii.cpp -o t02.exe -lsqlite3 && .\t02.exe</code>
+</div>
+<div class="card">
+  <b class="file">03_isolation_anomaly_lab.cpp</b> —— 异常复现车间（核心）<br>
+  真多线程真连接：脏读、不可重复读、丢失更新、写写冲突全部现场复现；
+  原子 UPDATE / 悲观锁 / 乐观锁 CAS 三种修法实测都做到分毫不差。<br>
+  <span class="why">重点感受：sqlite 的 BUSY / LOCKED 报错就是「隔离性在挣扎」的动静。</span>
+  <code class="cmd">g++ -std=c++17 -O2 03_isolation_anomaly_lab.cpp -o t03.exe -lsqlite3 && .\t03.exe</code>
+</div>
+<div class="card">
+  <b class="file">04_lock_and_deadlock.cpp</b> —— 手搓锁管理器（珠峰）<br>
+  S/X 锁 + FIFO 等待队列 + 锁升级 + 等待图找环 + 受害者回滚重试；
+  实测随机加锁死锁率 11.6% vs 排序加锁 0%。<br>
+  <span class="why">重点感受：行锁 ≈ 按 key 分片的 mutex；死锁检测 ≈ 等待图找环。</span>
+  <code class="cmd">g++ -std=c++17 -O2 04_lock_and_deadlock.cpp -o t04.exe && .\t04.exe</code>
+</div>
+
+<h2>动画与小抄</h2>
+<div class="card">
+  <a href="mvcc_animator.html">▶ mvcc_animator.html</a> —— 版本链动画：<br>
+  <span class="why">一行数据的版本链 + T1/T2 的 read view，RC/RR 一键切换，看「快照建立的时机」如何决定你能看见哪个版本。</span>
+</div>
+<div class="card">
+  <a href="isolation_playground.html">▶ isolation_playground.html</a> —— 双事务游乐场：<br>
+  <span class="why">转账 / 库存 / 报表三个预设场景 × 四种隔离级别，异常发生的瞬间亮红牌并讲原因；SER 下能看见「等待锁…」。</span>
+</div>
+<div class="card">
+  <b class="file">acid_cheatsheet.md</b> —— 小抄：ACID↔机制、隔离级别表（含 MySQL/PG 默认值）、死锁排查三板斧。
+</div>
+<div class="card">
+  <b class="file">tutorial.md</b> —— 老师傅的带教原文，文件清单 + 命令速查 + 踩坑叮嘱。
+</div>
+
+<h2>通关标准（自查表）</h2>
+<table>
+  <tr><th>标准</th><th>自测方法</th></tr>
+  <tr><td>说清 A 靠 undo log、D 靠 redo/WAL+fsync、I 靠锁+MVCC、C 靠约束+业务</td><td>对着小抄给别人讲一遍，讲不下去的地方就是没懂</td></tr>
+  <tr><td>03 的输出里找到「★脏读发生了」和修法后的「分毫不差 ✔」</td><td>自己跑 03，没看到就检查是否 shared-cache 连接姿势对了</td></tr>
+  <tr><td>04 演示 4 能解释为什么排序加锁死锁率归零</td><td>用「两条路反序过同一座独木桥」讲给同事听</td></tr>
+  <tr><td>RC 和 RR 的区别一句话说清</td><td>「快照建立的时机：每条语句一次 vs 事务第一次读一次」</td></tr>
+  <tr><td>线上死锁报警，第一步查什么</td><td>SHOW ENGINE INNODB STATUS / data_lock_waits，找持锁最久者</td></tr>
+  <tr class="ok"><td colspan="2">全绿 = 出师。事务这关过了，后面索引、复制、分片都是它的延伸。</td></tr>
+</table>
+
+<div class="foot">
+  上一关：筑基期（C++ 基础） · 本关：第 3 关 · 下一关：第 4 关 索引与查询计划<br>
+  本文件自包含，零外部资源；所有动画与程序离线可跑。
+</div>
+</body>
+</html>

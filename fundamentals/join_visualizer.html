@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JOIN 交互动画 · 连线演示五种连接</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface-2: #334155;
+    --ink: #f1f5f9;
+    --ink-muted: #94a3b8;
+    --ink-dim: #64748b;
+    --rule: #334155;
+    --accent: #38bdf8;
+    --accent-2: #818cf8;
+    --ok: #4ade80;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --mono: "Consolas", "Cascadia Mono", "Courier New", ui-monospace, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                 "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+    font-size: 14px;
+    padding-bottom: 60px;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px; }
+
+  header { margin-bottom: 18px; }
+  header h1 {
+    font-size: 1.7rem;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 6px;
+  }
+  header p { color: var(--ink-muted); font-size: 13px; }
+  header .links { margin-top: 8px; font-size: 12px; }
+  header .links a { color: var(--accent); text-decoration: none; margin-right: 14px; }
+  header .links a:hover { text-decoration: underline; }
+
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+  button {
+    font-family: inherit;
+    font-size: 13px;
+    border-radius: 7px;
+    padding: 7px 14px;
+    border: 1px solid var(--rule);
+    background: var(--surface-2);
+    color: var(--ink);
+    cursor: pointer;
+    transition: border-color .15s, background .15s, transform .1s;
+  }
+  button:hover { border-color: var(--accent); }
+  button:active { transform: translateY(1px); }
+  button.mode.active {
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #0b1220;
+    font-weight: 700;
+    border-color: transparent;
+  }
+  button.nav { min-width: 84px; }
+  button.nav:disabled { opacity: .35; cursor: not-allowed; }
+  .progress { color: var(--ink-dim); font-size: 12px; font-family: var(--mono); margin-left: auto; }
+
+  .condition {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--ink-muted);
+    background: var(--surface);
+    border: 1px dashed var(--rule);
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin-bottom: 14px;
+  }
+  .condition b { color: var(--accent); }
+
+  /* 舞台：左表 + 中间连线 + 右表 */
+  .stage {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .stage .grid3 {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 220px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+  }
+  @media (max-width: 860px) { .stage .grid3 { grid-template-columns: 1fr; } }
+  .tblbox h3 {
+    font-size: 12px;
+    color: var(--accent-2);
+    font-family: var(--mono);
+    margin-bottom: 6px;
+    letter-spacing: .04em;
+  }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+  th { color: var(--accent); font-family: var(--mono); font-size: 11.5px; background: #0b1220; }
+  td.num { font-family: var(--mono); color: #a5f3fc; }
+  td.nullv { color: var(--bad); font-style: italic; opacity: .8; }
+  tr.cur-hit   { background: rgba(74, 222, 128, 0.20); }
+  tr.cur-miss  { background: rgba(248, 113, 113, 0.16); }
+  tr.cur-match { background: rgba(56, 189, 248, 0.16); }
+  tr.done      { opacity: .55; }
+  .badge {
+    display: inline-block;
+    font-size: 10.5px;
+    border-radius: 4px;
+    padding: 1px 6px;
+    margin-left: 6px;
+    font-family: var(--mono);
+  }
+  .badge.miss { background: rgba(248,113,113,.22); color: var(--bad); }
+  .badge.hit  { background: rgba(74,222,128,.18); color: var(--ok); }
+
+  svg.wires {
+    position: absolute;
+    left: 0; top: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+  }
+  .wire        { stroke: rgba(56,189,248,.35); stroke-width: 1.4; fill: none; }
+  .wire.cur    { stroke: var(--ok); stroke-width: 2.2; }
+  .wire.cur-miss { stroke: var(--bad); stroke-width: 2; stroke-dasharray: 5 4; }
+  .wire.cross  { stroke: rgba(129,140,248,.4); stroke-width: 1.2; }
+  .wire.cur-cross { stroke: var(--accent-2); stroke-width: 1.8; }
+
+  /* 结果区 */
+  .result { margin-top: 18px; }
+  .result h2, .explain h2 {
+    font-size: 12px;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    margin-bottom: 8px;
+  }
+  .result .tablebox { overflow-x: auto; border-radius: 10px; border: 1px solid var(--rule); }
+  tr.fresh { background: rgba(56, 189, 248, 0.14); }
+  .empty { padding: 16px; color: var(--ink-dim); text-align: center; }
+
+  .explain {
+    margin-top: 16px;
+    background: linear-gradient(135deg, rgba(56,189,248,0.10), rgba(129,140,248,0.10));
+    border: 1px solid var(--accent);
+    border-left-width: 4px;
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 13.5px;
+    line-height: 1.75;
+    min-height: 60px;
+  }
+  .explain .lead { color: var(--accent); font-weight: 700; }
+  .explain code {
+    font-family: var(--mono);
+    background: rgba(11,18,32,.7);
+    padding: 1px 5px;
+    border-radius: 4px;
+    color: #e2e8f0;
+  }
+  footer { margin-top: 22px; color: var(--ink-dim); font-size: 12px; line-height: 1.8; }
+  footer code { font-family: var(--mono); color: var(--ink-muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🔗 JOIN 交互动画 · 把连接"连"给你看</h1>
+    <p>
+      左边是员工表，右边是部门表，连接条件是 <code style="font-family:var(--mono)">employee.dept_id = department.dept_id</code>。
+      数据里埋了两个"钩子"：钱进没有部门（dept_id 为 NULL），公关部一个员工都没有——
+      INNER / LEFT / RIGHT / FULL 的区别，全在这两处体现。
+    </p>
+    <p class="links">
+      <a href="index.html">← 返回模块导航</a>
+      <a href="sql_sandbox.html">上一个：SQL 沙盒 →</a>
+    </p>
+  </header>
+
+  <div class="toolbar">
+    <button class="mode active" data-mode="inner">INNER</button>
+    <button class="mode" data-mode="left">LEFT</button>
+    <button class="mode" data-mode="right">RIGHT</button>
+    <button class="mode" data-mode="full">FULL</button>
+    <button class="mode" data-mode="cross">CROSS</button>
+    <span style="width:14px"></span>
+    <button class="nav" id="prevBtn">← 上一步</button>
+    <button class="nav" id="nextBtn">下一步 →</button>
+    <button class="nav" id="resetBtn">重置</button>
+    <span class="progress" id="progress"></span>
+  </div>
+
+  <div class="condition" id="condLine"></div>
+
+  <div class="stage" id="stage">
+    <div class="grid3">
+      <div class="tblbox">
+        <h3>employee（员工表）· 8 行</h3>
+        <table id="empTable"></table>
+      </div>
+      <div></div>
+      <div class="tblbox">
+        <h3>department（部门表）· 4 行</h3>
+        <table id="deptTable"></table>
+      </div>
+    </div>
+    <svg class="wires" id="wires" xmlns="http://www.w3.org/2000/svg"></svg>
+  </div>
+
+  <div class="result">
+    <h2>连接结果（随步骤累积）</h2>
+    <div class="tablebox" id="resultBox"><div class="empty">点「下一步」开始演示。</div></div>
+  </div>
+
+  <div class="explain" id="explain"><span class="lead">老师傅先说一句：</span>
+    JOIN 的本质就是<b>两层 for 循环 + 一个 if</b>：拿左表每一行，去右表逐行比 ON 条件，
+    比上了就把两行拼成一行。五种 JOIN 的差别只有一件事——<b>比不上的行，扔还是留</b>。
+    点模式按钮，再点「下一步」，一行一行看。
+  </div>
+
+  <footer>
+    好消息：SQLite 从 <b>3.39</b>（2022 年）开始终于支持 <code>RIGHT JOIN</code> 和 <code>FULL OUTER JOIN</code> 了，
+    你机器上是 3.51，五种模式全能真跑。在老的 3.38 及更早版本里 RIGHT / FULL 是不认的，
+    老代码里那些 <code>LEFT JOIN ... UNION ... LEFT JOIN</code> 手拼的写法就是这么来的——见到别慌，知道它在补什么。
+    五种 JOIN 的概念在任何数据库都得懂：MySQL / PostgreSQL / SQL Server 全都有，而且面试必问。
+  </footer>
+</div>
+
+<script>
+"use strict";
+
+/* =====================================================================
+   数据：与 02_schema_design.sql 的 department / employee 同源，
+   另外埋了两个钩子（钱进 dept_id=NULL、公关部无人）用于演示未命中行
+   ===================================================================== */
+var DEPTS = [
+  { dept_id: 10, dept_name: "研发部", floor_no: 3 },
+  { dept_id: 20, dept_name: "测试部", floor_no: 3 },
+  { dept_id: 30, dept_name: "市场部", floor_no: 5 },
+  { dept_id: 40, dept_name: "公关部", floor_no: 6 }   /* 钩子：没有员工 */
+];
+var EMPS = [
+  { emp_id: 1, emp_name: "张伟", dept_id: 10,   salary: 30000 },
+  { emp_id: 2, emp_name: "李娜", dept_id: 10,   salary: 22000 },
+  { emp_id: 3, emp_name: "王强", dept_id: 10,   salary: 21000 },
+  { emp_id: 4, emp_name: "刘洋", dept_id: 20,   salary: 26000 },
+  { emp_id: 5, emp_name: "陈静", dept_id: 20,   salary: 19000 },
+  { emp_id: 6, emp_name: "杨帆", dept_id: 30,   salary: 28000 },
+  { emp_id: 7, emp_name: "赵磊", dept_id: 30,   salary: 18000 },
+  { emp_id: 8, emp_name: "钱进", dept_id: null, salary: 15000 }  /* 钩子：没有部门 */
+];
+
+function matched(empIdx, deptIdx) {
+  var e = EMPS[empIdx], d = DEPTS[deptIdx];
+  /* 三值逻辑：NULL = 任何值 都是 unknown，ON 条件不成立 → 不算匹配 */
+  if (e.dept_id === null) return false;
+  return e.dept_id === d.dept_id;
+}
+
+/* =====================================================================
+   步骤生成：每种模式 = 一串步骤，每步处理一个"驱动行"
+   ===================================================================== */
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, function (ch) {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch];
+  });
+}
+function numCell(v) {
+  return v === null ? '<td class="nullv">NULL</td>' : '<td class="num">' + esc(v) + "</td>";
+}
+
+function empName(i) { return EMPS[i].emp_name; }
+function deptName(i) { return DEPTS[i].dept_name; }
+
+/* 输出行：员工 | e.dept_id | 部门 | 楼层 */
+function outRow(empIdx, deptIdx) {
+  var e = empIdx === null ? null : EMPS[empIdx];
+  var d = deptIdx === null ? null : DEPTS[deptIdx];
+  return '<tr><td>' + (e ? esc(e.emp_name) : '<span class="nullv" style="color:#f87171;font-style:italic">NULL</span>') +
+         '</td>' + numCell(e ? e.dept_id : null) +
+         '<td>' + (d ? esc(d.dept_name) : '<span class="nullv" style="color:#f87171;font-style:italic">NULL</span>') +
+         '</td>' + numCell(d ? d.floor_no : null) + "</tr>";
+}
+
+function buildSteps(mode) {
+  var steps = [];
+  var i, j, matches;
+
+  if (mode === "inner" || mode === "left" || mode === "full") {
+    for (i = 0; i < EMPS.length; i++) {
+      matches = [];
+      for (j = 0; j < DEPTS.length; j++) if (matched(i, j)) matches.push(j);
+      var out = [];
+      var text = "";
+      var e = EMPS[i];
+      if (matches.length > 0) {
+        for (j = 0; j < matches.length; j++) out.push([i, matches[j]]);
+        text = "拿左表的 <code>" + empName(i) + "</code>（dept_id=" + e.dept_id +
+               "）去右表逐行比：命中 <code>" + deptName(matches[0]) + "</code>。" +
+               "ON 条件成立，两行拼成一行输出——五种 JOIN 都会输出这种行。";
+        steps.push({ side: "L", li: i, ri: matches, hit: true, rows: out, text: text });
+      } else {
+        /* 未命中 */
+        var why = (e.dept_id === null)
+          ? "他的 <code>dept_id</code> 是 <code>NULL</code>。记住：<b>NULL 跟任何值比较都是 unknown</b>——" +
+            "既不算相等也不算不等，ON 条件永远不成立。"
+          : "他的 <code>dept_id=" + e.dept_id + "</code> 在右表里找不到任何部门（悬垂引用）。";
+        if (mode === "inner") {
+          text = "拿左表的 <code>" + empName(i) + "</code> 去右表比了一圈，<b>没匹配上</b>。" + why +
+                 " <code>INNER JOIN</code> 的规则是<b>只留配对成功的行</b>，这一行直接扔掉——结果里没有他。";
+        } else {
+          out.push([i, null]);
+          text = "拿左表的 <code>" + empName(i) + "</code> 去右表比了一圈，<b>没匹配上</b>。" + why +
+                 " <code>LEFT JOIN</code> 的规则是<b>左表一行都不能少</b>：保留这一行，" +
+                 "右表的所有列用 <code>NULL</code> 补上。找「没配对的东西」（没归还的借阅、没部门的员工）就靠它。";
+        }
+        steps.push({ side: "L", li: i, ri: [], hit: false, rows: out, text: text });
+      }
+    }
+    if (mode === "full") {
+      /* 第二遍：右表里没被上面匹配到的行 */
+      var hitR = {};
+      for (i = 0; i < steps.length; i++)
+        for (j = 0; j < steps[i].ri.length; j++) hitR[steps[i].ri[j]] = true;
+      for (j = 0; j < DEPTS.length; j++) {
+        if (hitR[j]) continue;
+        steps.push({
+          side: "R", li: null, ri: [j], hit: false, rows: [[null, j]],
+          text: "左表扫完了。<code>FULL OUTER JOIN</code> 还有第二遍：右表里从没匹配过的行也要留。" +
+                "<code>" + deptName(j) + "</code>" + (DEPTS[j].dept_id === 40 ? "（公关部）" : "") +
+                " 底下<b>一个员工都没有</b>，于是保留它，左表所有列用 <code>NULL</code> 补上。" +
+                "这就是 FULL = LEFT + RIGHT 的并集：两边都一行不丢。"
+        });
+      }
+    }
+  }
+
+  if (mode === "right") {
+    for (j = 0; j < DEPTS.length; j++) {
+      matches = [];
+      for (i = 0; i < EMPS.length; i++) if (matched(i, j)) matches.push(i);
+      var out2 = [], text2;
+      if (matches.length > 0) {
+        for (i = 0; i < matches.length; i++) out2.push([matches[i], j]);
+        var names = [];
+        for (i = 0; i < matches.length; i++) names.push(empName(matches[i]));
+        text2 = "RIGHT JOIN 换个方向：这次<b>驱动表是右表</b>。拿 <code>" + deptName(j) +
+                "</code> 去左表扫一圈，找到员工：" + names.map(function (n) { return "<code>" + n + "</code>"; }).join("、") +
+                "。配对成功，逐行输出。注意 dept_id 为 NULL 的钱进永远不会被任何部门扫到。";
+        steps.push({ side: "R", li: null, ri: [j], hit: true, rows: out2, text: text2 });
+      } else {
+        out2.push([null, j]);
+        text2 = "拿 <code>" + deptName(j) + "</code> 去左表扫了一圈，<b>一个员工都没有</b>。" +
+                "<code>RIGHT JOIN</code> 的规则是<b>右表一行都不能少</b>：保留这个部门，" +
+                "左表所有列用 <code>NULL</code> 补上。它跟 LEFT JOIN 完全对称——把两边对调就是。";
+        steps.push({ side: "R", li: null, ri: [j], hit: false, rows: out2, text: text2 });
+      }
+    }
+  }
+
+  if (mode === "cross") {
+    for (i = 0; i < EMPS.length; i++) {
+      var out3 = [];
+      for (j = 0; j < DEPTS.length; j++) out3.push([i, j]);
+      steps.push({
+        side: "L", li: i, ri: [0, 1, 2, 3], hit: true, rows: out3,
+        text: "<code>CROSS JOIN</code>（笛卡尔积）：<b>不比条件</b>，左表这一行直接跟右表<b>每一行</b>都配对——" +
+              "<code>" + empName(i) + "</code> × 4 个部门 = 新增 4 行。全部做完是 8 × 4 = <b>32</b> 行。" +
+              "这东西平时是事故（忘写 ON 就会得到它），偶尔有用：生成排班表、日历表、全组合测试数据。"
+      });
+    }
+  }
+
+  return steps;
+}
+
+/* =====================================================================
+   渲染
+   ===================================================================== */
+var MODE_NAMES = {
+  inner: { sql: "FROM employee e INNER JOIN department d ON d.dept_id = e.dept_id",
+           rule: "只保留两边都能配上的行。配不上的，两边都扔。" },
+  left:  { sql: "FROM employee e LEFT JOIN department d ON d.dept_id = e.dept_id",
+           rule: "左表一行不丢；配不上的，右表列补 NULL。" },
+  right: { sql: "FROM employee e RIGHT JOIN department d ON d.dept_id = e.dept_id",
+           rule: "右表一行不丢；配不上的，左表列补 NULL。SQLite 3.39 起才支持，老版本要手拼。" },
+  full:  { sql: "FROM employee e FULL OUTER JOIN department d ON d.dept_id = e.dept_id",
+           rule: "两边都一行不丢（= LEFT ∪ RIGHT）。同样是 SQLite 3.39 起才支持。" },
+  cross: { sql: "FROM employee e CROSS JOIN department d",
+           rule: "不比条件，全组合：行数 = 8 × 4 = 32。忘写 ON 时的默认行为就是它。" }
+};
+
+var mode = "inner";
+var steps = buildSteps(mode);
+var step = -1;   /* -1 = 还没开始 */
+
+function $(id) { return document.getElementById(id); }
+
+function renderTables() {
+  var html = "<tr><th>emp_name</th><th>dept_id</th><th>salary</th></tr>";
+  for (var i = 0; i < EMPS.length; i++) {
+    html += '<tr id="e' + i + '"><td>' + esc(EMPS[i].emp_name) + "</td>" +
+            numCell(EMPS[i].dept_id) + '<td class="num">' + EMPS[i].salary + "</td></tr>";
+  }
+  $("empTable").innerHTML = html;
+
+  html = "<tr><th>dept_name</th><th>dept_id</th><th>floor_no</th></tr>";
+  for (var j = 0; j < DEPTS.length; j++) {
+    html += '<tr id="d' + j + '"><td>' + esc(DEPTS[j].dept_name) + "</td>" +
+            '<td class="num">' + DEPTS[j].dept_id + "</td>" +
+            '<td class="num">' + DEPTS[j].floor_no + "</td></tr>";
+  }
+  $("deptTable").innerHTML = html;
+}
+
+function drawWires() {
+  var stage = $("stage");
+  var svg = $("wires");
+  var sr = stage.getBoundingClientRect();
+  svg.setAttribute("width", sr.width);
+  svg.setAttribute("height", sr.height);
+  var out = "";
+
+  function line(fromEl, toEl, cls) {
+    var a = fromEl.getBoundingClientRect(), b = toEl.getBoundingClientRect();
+    var x1 = a.right - sr.left + 2, y1 = a.top + a.height / 2 - sr.top;
+    var x2 = b.left - sr.left - 2,  y2 = b.top + b.height / 2 - sr.top;
+    var mx = (x1 + x2) / 2;
+    out += '<path class="' + cls + '" d="M ' + x1 + " " + y1 +
+           " C " + mx + " " + y1 + ", " + mx + " " + y2 + ", " + x2 + " " + y2 + '"/>';
+  }
+
+  var crossLine = (mode === "cross");
+  for (var s = 0; s <= step; s++) {
+    var st = steps[s];
+    var isCur = (s === step);
+    if (st.li !== null && st.side === "L") {
+      for (var j = 0; j < st.ri.length; j++) {
+        line($("e" + st.li), $("d" + st.ri[j]),
+             crossLine ? (isCur ? "wire cur-cross" : "wire cross")
+                       : (isCur ? "wire cur" : "wire"));
+      }
+      if (st.side === "L" && !st.hit && !crossLine) {
+        /* 未命中：从左行引一条虚线到中间断头 */
+        var e1 = $("e" + st.li).getBoundingClientRect();
+        var x1 = e1.right - sr.left + 2, y1 = e1.top + e1.height / 2 - sr.top;
+        out += '<path class="' + (isCur ? "wire cur-miss" : "wire cur-miss") +
+               '" d="M ' + x1 + " " + y1 + " l 90 0\"/>" +
+               '<text x="' + (x1 + 96) + '" y="' + (y1 + 4) +
+               '" fill="#f87171" font-size="11" font-family="Consolas,monospace">✗ 无匹配</text>';
+      }
+    } else if (st.side === "R") {
+      for (var m = 0; m < st.rows.length; m++)
+        if (st.rows[m][0] !== null) line($("e" + st.rows[m][0]), $("d" + st.ri[0]), isCur ? "wire cur" : "wire");
+      if (!st.hit && st.ri.length) {
+        /* 右表未命中：从右行向左引一条断头虚线 */
+        var d1 = $("d" + st.ri[0]).getBoundingClientRect();
+        var x3 = d1.left - sr.left - 2, y3 = d1.top + d1.height / 2 - sr.top;
+        out += '<path class="wire cur-miss" d="M ' + x3 + " " + y3 + ' l -90 0"/>' +
+               '<text x="' + (x3 - 96) + '" y="' + (y3 + 4) +
+               '" fill="#f87171" font-size="11" text-anchor="end" font-family="Consolas,monospace">✗ 无人认领</text>';
+      }
+    }
+  }
+  svg.innerHTML = out;
+}
+
+function renderRows() {
+  /* 左表行状态 */
+  var state = {};   /* id -> {cls, badge} */
+  for (var s = 0; s <= step; s++) {
+    var st = steps[s];
+    if (st.side === "L" && st.li !== null)
+      state["e" + st.li] = { cls: st.hit ? "cur-hit" : "cur-miss",
+                             badge: st.hit ? null : "✗ 未命中" };
+    for (var j = 0; j < st.ri.length; j++) {
+      var did = "d" + st.ri[j];
+      if (!state[did] || s === step)
+        state[did] = { cls: (st.hit || mode === "cross") ? "cur-match" : state[did] ? state[did].cls : "", badge: null };
+    }
+  }
+  if (step >= 0) {
+    /* 当前驱动步覆盖为强高亮 */
+    var cur = steps[step];
+    if (cur.side === "L" && cur.li !== null)
+      state["e" + cur.li] = { cls: cur.hit ? "cur-hit" : "cur-miss", badge: cur.hit ? "✓ 命中" : "✗ 未命中" };
+    if (cur.side === "R" && cur.ri.length)
+      state["d" + cur.ri[0]] = { cls: cur.hit ? "cur-hit" : "cur-miss", badge: cur.hit ? null : "✗ 没人认领" };
+  }
+  var all = document.querySelectorAll("#empTable tr, #deptTable tr");
+  for (var r = 0; r < all.length; r++) {
+    var tr = all[r];
+    if (tr.id && state[tr.id]) {
+      tr.className = state[tr.id].cls || "";
+      var nameTd = tr.cells[0];
+      var old = nameTd.querySelector(".badge");
+      if (old) nameTd.removeChild(old);
+      if (state[tr.id].badge) {
+        var b = document.createElement("span");
+        b.className = "badge " + (state[tr.id].badge.indexOf("✗") >= 0 ? "miss" : "hit");
+        b.textContent = state[tr.id].badge;
+        nameTd.appendChild(b);
+      }
+    } else if (tr.id) {
+      tr.className = (step > 0) ? "" : "";
+      var old2 = tr.cells[0].querySelector(".badge");
+      if (old2) tr.cells[0].removeChild(old2);
+    }
+  }
+}
+
+function renderResult() {
+  var box = $("resultBox");
+  if (step < 0) {
+    box.innerHTML = '<div class="empty">点「下一步」开始演示。</div>';
+    return;
+  }
+  var rows = [];
+  var freshStart = 0;
+  for (var s = 0; s <= step; s++) {
+    freshStart = rows.length;
+    for (var j = 0; j < steps[s].rows.length; j++) rows.push(steps[s].rows[j]);
+  }
+  var html = '<table><tr><th>e.emp_name</th><th>e.dept_id</th><th>d.dept_name</th><th>d.floor_no</th></tr>';
+  if (rows.length === 0)
+    html += '<tr><td colspan="4" class="empty">到目前为止 INNER JOIN 一行都还没产出……别急，往下看。</td></tr>';
+  for (var i = 0; i < rows.length; i++)
+    html += outRow(rows[i][0], rows[i][1]).replace("<tr>", "<tr" + (i >= freshStart ? ' class="fresh"' : "") + ">");
+  html += "</table>";
+  box.innerHTML = html;
+}
+
+function render() {
+  $("condLine").innerHTML = "<b>" + MODE_NAMES[mode].sql + "</b>　｜　规则：" + MODE_NAMES[mode].rule;
+  $("progress").textContent = "步骤 " + Math.max(step + 1, 0) + " / " + steps.length;
+  $("prevBtn").disabled = (step < 0);
+  $("nextBtn").disabled = (step >= steps.length - 1);
+  renderRows();
+  drawWires();
+  renderResult();
+
+  var ex = $("explain");
+  if (step < 0) {
+    ex.innerHTML = '<span class="lead">当前模式：' + mode.toUpperCase() + "。</span>" +
+      MODE_NAMES[mode].rule + "　点「下一步 →」开始逐行演示。" +
+      "先盯住两个钩子：<code>钱进</code>（dept_id 为 NULL）和 <code>公关部</code>（没人认领）。";
+  } else {
+    ex.innerHTML = '<span class="lead">第 ' + (step + 1) + " 步：</span>" + steps[step].text;
+  }
+}
+
+function setMode(m) {
+  mode = m;
+  steps = buildSteps(m);
+  step = -1;
+  var btns = document.querySelectorAll("button.mode");
+  for (var i = 0; i < btns.length; i++)
+    btns[i].className = "mode" + (btns[i].getAttribute("data-mode") === m ? " active" : "");
+  renderTables();
+  render();
+}
+
+$("nextBtn").addEventListener("click", function () { if (step < steps.length - 1) { step++; render(); } });
+$("prevBtn").addEventListener("click", function () { if (step >= 0) { step--; render(); } });
+$("resetBtn").addEventListener("click", function () { step = -1; render(); });
+var modeBtns = document.querySelectorAll("button.mode");
+for (var mb = 0; mb < modeBtns.length; mb++) {
+  modeBtns[mb].addEventListener("click", function (ev) {
+    setMode(ev.currentTarget.getAttribute("data-mode"));
+  });
+}
+window.addEventListener("resize", drawWires);
+
+renderTables();
+render();
+</script>
+</body>
+</html>
