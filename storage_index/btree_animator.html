@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>B+ 树插入动画 · 阶 = 4</title>
+<title>B+ 树插入与查找动画 · 阶 = 4</title>
 <style>
   :root{
     --bg:#0f172a; --bg2:#0b1220; --panel:#111c33; --line:#1e293b;
@@ -51,6 +51,9 @@
   #log{max-height:150px;overflow:auto;font-size:11.5px;color:var(--mu);
        line-height:1.55;background:#0a1120;border-radius:6px;padding:8px 10px}
   #log div{border-bottom:1px dotted #16233c;padding:2px 0}
+  #log .dup,#say .dup{color:#fb7185}
+  code{background:#0b1220;border:1px solid #24344f;border-radius:4px;padding:0 5px;
+       font-family:Consolas,monospace;font-size:11.5px;color:#a5f3fc}
   .legend{font-size:11.5px;color:var(--mu);padding:8px 12px;border-top:1px solid var(--line)}
   .k{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 4px 0 10px;vertical-align:middle}
   /* ---- 分裂动画：节点用 transform 出生，被提升的 key 用 transition 飞一下 ---- */
@@ -70,15 +73,18 @@
   <h1>B+ 树插入动画 <small>阶（order）= 4 · 每个节点最多 3 个 key · 超过就分裂</small></h1>
   <div class="sub">
     把每个节点想成磁盘上的<u>一页</u>：一次"下降一层" = 一次页读取。
-    盯着右侧的<em>页读取次数</em>，它永远等于树高 —— 这就是数据库选 B+ 树的全部理由。
+    盯着右侧的<em>页读取次数</em>：<em>纯查找</em>时它永远等于树高 —— 这就是数据库选 B+ 树的全部理由
+    （插入还要多付分裂那几页的<em>写</em>，动画里会在最后一帧单独报出来）。
   </div>
 </header>
 
 <div class="wrap">
   <div class="stage">
     <div class="bar">
-      <input type="text" id="inp" placeholder="输入整数" value="42">
+      <input type="text" id="inp" placeholder="整数，或 20~45" value="42">
       <button class="primary" id="btnIns">插入</button>
+      <button id="btnFind">查找</button>
+      <button id="btnRange">范围查</button>
       <button id="btnRnd">插入随机</button>
       <button class="warn" id="btnAuto">自动演示（连插 12 个）</button>
       <button id="btnUndo">撤销</button>
@@ -106,27 +112,33 @@
   <div class="side">
     <div class="card">
       <h3>本次操作计数器</h3>
-      <div class="stat"><span>比较次数</span><b id="sCmp">0</b><i>次</i></div>
-      <div class="stat v"><span>页读取次数</span><b id="sIo">0</b><i>页</i></div>
+      <div class="stat"><span>本次操作·比较次数</span><b id="sCmp">0</b><i>次</i></div>
+      <div class="stat v"><span>本次操作·页读取</span><b id="sIo">0</b><i>页</i></div>
       <div class="stat"><span>树高</span><b id="sH">0</b><i>层</i></div>
       <div class="stat v"><span>节点（页）总数</span><b id="sN">0</b><i>页</i></div>
-      <div class="stat"><span>已插入 key</span><b id="sK">0</b><i>个</i></div>
+      <div class="stat"><span>全树 key 总数（含路标）</span><b id="sK">0</b><i>个</i></div>
     </div>
     <div class="card">
       <h3>解说</h3>
-      <div id="say">点「插入」或「自动演示」，看一棵树怎么从 1 页长到 3 层。</div>
+      <div id="say">点「插入」或「自动演示」，看一棵树怎么从 1 页长到 3 层；<br>
+        插好之后用「查找」「范围查」——只读不写，专门看<em>页读取</em>怎么等于树高、范围查怎么顺叶子链表横向走。</div>
     </div>
     <div class="card">
       <h3>操作日志</h3>
       <div id="log"></div>
     </div>
     <div class="card">
-      <h3>自己试这三个实验</h3>
+      <h3>自己试这四个实验</h3>
       <div style="font-size:12.5px;color:var(--mu);line-height:1.7">
         1. 连插 1..12（顺序），看分裂是不是往一边倒；<br>
-        2. 点几次「插入随机」，比较页读取次数和树高的关系；<br>
-        3. 每次分裂后节点只填了 2/3 —— 想想为什么真实数据库的
-        叶子填充率一般只有 60~75%，"理论树高"要往上加一层。
+        2. 点几次「插入随机」，看最后一帧：读的页数 = 下降层数，写的页数 = 这次分裂新增的页（原页和父页的回写另算）；<br>
+        3. 插满十几页后点「查找」查一个<b>不存在</b>的数 —— 页读取照样等于树高，
+        未命中也要付满钱；再点「范围查」（如 <code>20~70</code>），看横向那几页是怎么顺链表走的；<br>
+        4. 本动画对每次分裂都用同一条规则：劈完只填 2/3。真实数据库要看怎么插 ——
+        <b>随机 key</b> 反复分裂，密度按期望只剩 ln2 ≈ 69%（02 那棵树实测内部节点 58%），
+        "理论树高"因此要往上加一层；<b>自增主键</b>只碰最右边那一页，引擎认出这是"只往末尾追加"，
+        就把老页原地留在满的状态、新开一页收后面的行，于是一路插下去老页几乎不留空隙。
+        同一棵树，插法不同，密度能差一倍 —— 这也是自增主键比随机 UUID 省一半空间的根因。
       </div>
     </div>
   </div>
@@ -173,15 +185,30 @@ function lowerBound(arr, k) {
   while (lo < hi) { var m = (lo + hi) >> 1; if (arr[m] < k) lo = m + 1; else hi = m; }
   return lo;
 }
-// 页内查找要比较几次：对一页里的 n 个 key 做二分
-function intraCmp(n) { var c = 0, x = n; while (x > 0) { c++; x >>= 1; } return n ? c + 1 : 1; }
+// 页内二分最坏比较次数 = ⌈log2(n+1)⌉，与 upperBound/lowerBound 同一套走位
+function intraCmp(n) { var c = 0, lim = 1; while (lim <= n) { c++; lim <<= 1; } return c; }
+
+// 纯查找：一路下降到叶子，返回命中页 + 这次查找花了多少比较/页读取
+function findKey(nodes, root, key) {
+  if (root < 0) return { page: -1, io: 0, cmp: 0 };
+  var cur = root, io = 1, cmp = 0;
+  while (nodes[cur] && !nodes[cur].leaf) {
+    cmp += intraCmp(nodes[cur].keys.length);
+    cur = nodes[cur].ch[upperBound(nodes[cur].keys, key)];
+    io += 1;
+  }
+  if (!nodes[cur]) return { page: -1, io: io, cmp: cmp };
+  cmp += intraCmp(nodes[cur].keys.length);
+  var p = lowerBound(nodes[cur].keys, key);
+  return { page: nodes[cur].keys[p] === key ? cur : -1, io: io, cmp: cmp };
+}
 
 // ================================================================
 //  一次插入 = 录一串帧
 // ================================================================
 function recordInsert(nodes, root, key) {
   var frames = [];
-  var cmp = 0, io = 0;
+  var cmp = 0, io = 0, newPages = 0;
   var path = [];                       // [{node, idx}] 下降路径
 
   function push(o) {
@@ -199,9 +226,10 @@ function recordInsert(nodes, root, key) {
     only.keys.push(key);
     nodes[only.id] = only;
     rootRef.v = only.id;
-    io = 1; cmp = 1;
+    io = 1; cmp = 0;
     push({ born: [only.id], promote: key,
-           say: "空树。新建<b>唯一一页</b>当根，同时它也是叶子 —— 这时候树高 = 1。" });
+           say: "空树。新建<b>唯一一页</b>当根，同时它也是叶子 —— 这时候树高 = 1。" +
+                "页里一个 key 都没有，所以比较 0 次。" });
     return { frames: frames, root: rootRef.v, nodes: nodes };
   }
 
@@ -216,10 +244,13 @@ function recordInsert(nodes, root, key) {
     cmp += c;
     var idx = upperBound(n.keys, key);
     push({ hot: [cur].concat(path.map(function (p) { return p.node; })),
-           mark: { node: cur, cell: idx > 0 ? idx - 1 : 0 },
-           say: "这是内部节点，keys = [" + n.keys.join(", ") + "]。页内二分比了 <em>" + c +
-                "</em> 次，决定走第 <b>" + (idx + 1) + "</b> 个孩子（key ≤ " +
-                (idx < n.keys.length ? n.keys[idx] : "∞" + "") + " 的分界）。" });
+           mark: idx > 0 ? { node: cur, cell: idx - 1 } : null,
+           say: "内部节点 keys = [" + n.keys.join(", ") + "]，页内二分最坏比 <em>" + c + "</em> 次 → " +
+                "有 " + idx + " 个路标 ≤ " + key + "，走第 <b>" + (idx + 1) + "</b> 个孩子：" +
+                (idx === 0 ? "&lt; <b>" + n.keys[0] + "</b>（最小的一档）"
+                           : idx === n.keys.length ? "≥ <b>" + n.keys[idx - 1] + "</b>（最大的一档）"
+                           : "<b>" + n.keys[idx - 1] + "</b> ≤ key &lt; <b>" + n.keys[idx] + "</b>") +
+                "。<em>路标 = 右子树最小键</em>，左闭右开，所以正好等于路标的 key 归右边那页。" });
     path.push({ node: cur, idx: idx });
     cur = n.ch[idx];
     io += 1;
@@ -232,10 +263,12 @@ function recordInsert(nodes, root, key) {
   var cl = intraCmp(lf.keys.length);
   cmp += cl;
   var pos = lowerBound(lf.keys, key);
+  var oldKeys = lf.keys.slice();
   lf.keys.splice(pos, 0, key);
   push({ hot: [cur], promote: key,
-         say: "叶子 keys = [" + lf.keys.join(", ") + "]，页内二分 <em>" + cl +
-              "</em> 次定位到槽位 " + pos + "，插进去。此刻本页有 <b>" + lf.keys.length + "</b> 个 key。" });
+         say: "到了叶子，原来有 [" + oldKeys.join(", ") + "]，页内二分最坏比 <em>" + cl +
+              "</em> 次 → 槽位 " + pos + "。插完变成 [" + lf.keys.join(", ") + "]，本页 <b>" +
+              lf.keys.length + "</b> 个 key。" });
 
   // ---------- 3. 溢出就分裂，一路往上顶 ----------
   var carryKey = null, carryNode = null;
@@ -246,6 +279,7 @@ function recordInsert(nodes, root, key) {
     sib.next = lf.next;
     lf.next = sib.id;
     nodes[sib.id] = sib;
+    newPages += 1;
     carryKey = sib.keys[0];
     carryNode = sib.id;
     push({ hot: [lf.id, sib.id], promote: carryKey, born: [sib.id],
@@ -260,8 +294,8 @@ function recordInsert(nodes, root, key) {
       nr.keys = [carryKey];
       nr.ch = [rootRef.v, carryNode];
       nodes[nr.id] = nr;
-      nodes[rootRef.v].parent = nr.id;
       rootRef.v = nr.id;
+      newPages += 1;
       push({ hot: [nr.id], promote: carryKey, born: [nr.id],
              say: "根也满了。<b>长高一层</b>：新建根 [" + carryKey + "]，两个孩子 = 旧根 与 新页。" +
                   "现在树高 = <em>" + treeHeight(nodes, nr.id) + "</em>。注意：只有分裂会让它长高，永不收缩（本课没有删除）。" });
@@ -277,27 +311,110 @@ function recordInsert(nodes, root, key) {
                 "非叶子只存<b>路标</b>，不存数据，所以一页能装很多分叉（扇出大 = 树矮 = I/O 少）。" });
     carryKey = null; carryNode = null;
     if (pn.keys.length > MAX_KEYS) {
-      var pmid = Math.floor(pn.keys.length / 2);    // 4 个 -> 顶上第 3 个，自己留 2
+      var pmid = Math.floor(pn.keys.length / 2);    // 4 个 key -> 下标 2 那个上提
       var up = pn.keys[pmid];
       var isib = mkNode(false);
-      isib.keys = pn.keys.splice(pmid + 1);
-      isib.ch = pn.ch.splice(pmid + 1);
+      isib.keys = pn.keys.splice(pmid + 1);         // 右兄弟拿走更靠右的那些
+      pn.keys.splice(pmid, 1);                      // 上提的分隔符自己一份都不留
+      isib.ch = pn.ch.splice(pmid + 1);             // 右边那几个孩子跟右兄弟走
       nodes[isib.id] = isib;
-      var keepKey = pn.keys.slice(); var keepCh = pn.ch.slice();
-      pn.keys = keepKey; pn.ch = keepCh;
+      newPages += 1;
       carryKey = up; carryNode = isib.id;
       push({ hot: [pn.id, isib.id], promote: up, born: [isib.id],
-             say: "内部节点也满了，照样一分为二。中间那个 <b>" + up +
-                  "</b> 上提后<b>自己不留</b>（内部节点的 key 是分隔符，只能有一份）。继续往上顶。" });
+             say: "内部节点也满了，照样一分为二：左 [" + pn.keys.join(", ") + "]、右 [" + isib.keys.join(", ") + "]。" +
+                  "中间那个 <b>" + up + "</b> 上提后<b>自己不留</b>（内部节点的 key 是分隔符，只能有一份 —— " +
+                  "和叶子那边「复制」正好相反）。所以左边 " + pn.keys.length + " 个 key 配 " + pn.ch.length +
+                  " 个孩子，分隔符数永远比孩子数少 1。继续往上顶。" });
     }
   }
 
-  io = treeHeight(nodes, rootRef.v);
   push({ hot: [], say: "完成。这一次插入：<em>比较 " + cmp + " 次</em>（CPU 的账），" +
-                       "<em>页读取 " + io + " 次</em>（磁盘的账 —— 就等于树高）。" +
+                       "<em>页读取 " + io + " 次</em>（下降路上读过的页数），" +
+                       "分裂新写 <em>" + newPages + "</em> 页（磁盘的账 = 读 " + io + " + 写 " + newPages + "）。" +
+                       "这 " + newPages + " 只是<em>新增</em>的页：被劈的原页、沿途改了孩子指针的父页，" +
+                       "各自还得回写一次 —— 真实写账是「新页 + 改动的旧页」。" +
+                       "纯查找不分裂，读的页数正好等于当时的树高；<b>插入</b>还得多付分裂那几页的写。" +
                        "真实数据库里，如果这些页都在 Buffer Pool 里，页读取就变成 0 次磁盘 I/O，" +
                        "但<b>比较次数一次都省不掉</b>。" });
   return { frames: frames, root: rootRef.v, nodes: nodes };
+}
+
+// ================================================================
+//  一次查找 / 一次范围查 = 也录成一串帧（只读不写，不改树）
+// ================================================================
+function recordLookup(nodes, root, a, b) {
+  var frames = [], cmp = 0, io = 0, visited = [];
+  function push(o) {
+    frames.push({ nodes: snapshot(nodes, root), cmp: cmp, io: io,
+                  height: treeHeight(nodes, root), hot: o.hot || [],
+                  promote: null, born: [], say: o.say || "", mark: o.mark || null });
+  }
+  if (root < 0) { push({ say: "空树，没什么可查 —— 先点「自动演示」把树养起来。" }); return frames; }
+
+  var lo = Math.min(a, b), hi = Math.max(a, b), isRange = hi > lo;
+  var cur = root; io = 1; visited = [cur];
+  push({ hot: visited.slice(), say: (isRange ? "范围查 <b>[" + lo + ", " + hi + "]</b>" : "查 <b>" + lo + "</b>") +
+                                     "：读根页（<em>页读取 +1</em>）。" });
+
+  while (!nodes[cur].leaf) {
+    var n = nodes[cur], c = intraCmp(n.keys.length);
+    cmp += c;
+    var idx = upperBound(n.keys, lo);
+    push({ hot: visited.slice(),
+           mark: idx > 0 ? { node: cur, cell: idx - 1 } : null,
+           say: "内部节点 keys = [" + n.keys.join(", ") + "]，页内二分最坏比 <em>" + c + "</em> 次 → " +
+                "有 " + idx + " 个路标 ≤ " + lo + "，走第 <b>" + (idx + 1) + "</b> 个孩子：" +
+                (idx === 0 ? "&lt; <b>" + n.keys[0] + "</b>"
+                           : idx === n.keys.length ? "≥ <b>" + n.keys[idx - 1] + "</b>"
+                           : "<b>" + n.keys[idx - 1] + "</b> ≤ key &lt; <b>" + n.keys[idx] + "</b>") + "。" });
+    cur = n.ch[idx]; io += 1; visited.push(cur);
+    push({ hot: visited.slice(), say: "下降一层 → <em>页读取 +1</em>（累计 " + io + " 页）。" });
+  }
+
+  var downPages = io;                       // 下降用掉的页数；点查到此为止
+  var L = nodes[cur];
+  var cl = intraCmp(L.keys.length); cmp += cl;
+  var st = lowerBound(L.keys, lo);
+  push({ hot: visited.slice(), mark: { node: cur, cell: Math.min(st, Math.max(L.keys.length - 1, 0)) },
+         say: "落到叶子页#" + cur + "（下降一共读 <em>" + downPages + "</em> 页 = 树高）。" +
+              "页内二分最坏比 <em>" + cl + "</em> 次 → 从槽位 " + st + " 开始看。" });
+
+  if (!isRange) {
+    var ok = L.keys[st] === lo && st < L.keys.length;
+    push({ hot: visited.slice(), mark: ok ? { node: cur, cell: st } : null,
+           say: (ok ? "<b>命中</b>：页#" + cur + " 的槽位 " + st + " 就是 " + lo + "。"
+                    : "<b>未命中</b>：树里没有 " + lo + "（按约定它应落在页#" + cur + " 的槽位 " + st + "）。") +
+                " 这一次查找：<em>比较 " + cmp + " 次</em>，<em>页读取 " + io + " 页</em> —— 正好等于树高 " +
+                downPages + "。<b>没找到也要付满树高</b>，这就是「索引把全表扫描变成对数」的那笔账。" });
+    return frames;
+  }
+
+  var hits = [], p = cur, scanPages = 0, prev = null;
+  cmp += L.keys.length - st;                       // 定位之后页内就是顺序扫了
+  while (p >= 0 && nodes[p]) {
+    L = nodes[p];
+    for (var i = 0; i < L.keys.length; i++)
+      if (L.keys[i] >= lo && L.keys[i] <= hi) hits.push(L.keys[i]);
+    prev = L;
+    if (L.keys.length && L.keys[L.keys.length - 1] >= hi) break;   // 本页已盖住右端点，后面必然越界
+    if (L.next < 0) break;                                          // 链表到头
+    p = L.next; io += 1; scanPages += 1; visited.push(p);
+    if (scanPages > 60) break;                                      // 保险丝
+    L = nodes[p];
+    cmp += L.keys.length;                                          // 整页顺序扫，每个 key 都要看一眼
+    push({ hot: visited.slice(), mark: null,
+           say: "本页最大 <b>" + prev.keys[prev.keys.length - 1] + "</b> 还没到 " + hi +
+                " → 顺叶子链表走 → <em>页读取 +1</em>（累计 " + io + " 页）。这一页 keys = [" +
+                L.keys.join(", ") + "]。" });
+  }
+
+  push({ hot: visited.slice(),
+         say: "范围 <b>[" + lo + ", " + hi + "]</b> 命中 <b>" + hits.length + "</b> 个：[" +
+              (hits.join(", ") || "空") + "]。<br>账目：比较 " + cmp + " 次，读页 " + io + " 页 = " +
+              "<b>下降 " + downPages + " 页</b>（= 树高）+ <b>横向 " + scanPages + " 页</b>（顺链表）。<br>" +
+              "换成二叉搜索树，每翻下一个都要从根重走一遍（N 个 ≈ N×树高 页）；" +
+              "B+ 树靠叶子链表把范围查摊成「一次下降 + 一趟顺序扫」，<b>这就是它赢了 B 树的地方</b>。" });
+  return frames;
 }
 
 function treeHeight(nodes, root) {
@@ -470,6 +587,19 @@ function drainQueue() {
 
 function doInsert(key) {
   if (player.busy) { player.queue.push(key); return; }
+  var hit = findKey(state.nodes, state.root, key);
+  if (hit.page >= 0) {
+    logLine('<b class="dup">拒绝重复键 ' + key + '</b>（已在页#' + hit.page + '）');
+    renderIdle();
+    document.getElementById("say").innerHTML =
+      "<b class=\"dup\">Duplicate key</b>：这个 key 已经在页#" + hit.page + " 里了 —— " +
+      "查找走了 " + hit.io + " 页、比了 " + hit.cmp + " 次才确认。<br>" +
+      "主键索引里 key 天然唯一，重复插入直接被约束挡掉；二级索引想允许重复，" +
+      "InnoDB 的做法是<b>把主键拼到 key 后面</b>：「(" + key + ", 主键)」就不重复了。" +
+      "本课的 key 没带这个后缀，所以按唯一键处理，不画歪树。";
+    if (player.queue.length) drainQueue();
+    return;
+  }
   var before = { nodes: cloneTreeWithRoot(state.nodes, state.root), root: state.root };
   var res = recordInsert(state.nodes, state.root, key);
   state.history.push(before);
@@ -477,6 +607,15 @@ function doInsert(key) {
   logLine("插入 <b>" + key + "</b> → 树高 " + treeHeight(state.nodes, state.root) +
           "，共 " + countNodes(state.nodes) + " 页");
   playFrames(res.frames);
+}
+
+// 随机取一个树上还没有的 key（连试 30 次，实在满就作罢）
+function randomFreeKey() {
+  for (var t = 0; t < 30; t++) {
+    var k = Math.floor(Math.random() * 90) + 5;
+    if (findKey(state.nodes, state.root, k).page < 0) return k;
+  }
+  return Math.floor(Math.random() * 90) + 5;
 }
 
 function cloneTreeWithRoot(nodes, root) { var t = cloneTree(nodes); t.__root = root; return t; }
@@ -491,15 +630,40 @@ document.getElementById("btnIns").onclick = function () {
   var v = document.getElementById("inp").value.trim();
   if (!/^-?\d{1,9}$/.test(v)) { document.getElementById("say").innerHTML = "请输入一个整数（1~9 位）。"; return; }
   var k = parseInt(v, 10);
-  var r = Math.floor(Math.random() * 90) + 10;
-  document.getElementById("inp").value = r;
+  // 插完不回写输入框：把框里的数换成随机 key，下一步点「查找」就会查一个你没输过的数。
+  // 想连插就点「插入随机」（它自己取随机数，不读这个框）。
   doInsert(k);
 };
 document.getElementById("inp").addEventListener("keydown", function (e) {
   if (e.key === "Enter") document.getElementById("btnIns").click();
 });
+// 输入框允许 "20"（点查）或 "20,45" / "20~45" / "20-45" / "20..45"（范围）
+function readRange() {
+  var v = document.getElementById("inp").value.trim();
+  var m = v.match(/^(-?\d{1,9})\s*(?:,|~|-|\.\.)\s*(-?\d{1,9})$/);
+  if (m) return [+m[1], +m[2]];
+  return /^-?\d{1,9}$/.test(v) ? [+v, +v] : null;
+}
+function doLookup(a, b) {
+  if (player.busy) { document.getElementById("say").innerHTML = "等当前动画播完再查。"; return; }
+  var frames = recordLookup(state.nodes, state.root, a, b);
+  logLine((a === b ? "查找 <b>" + a + "</b>" : "范围查 <b>[" + a + ", " + b + "]</b>") +
+          " → " + frames[frames.length - 1].io + " 页");
+  playFrames(frames);
+}
+document.getElementById("btnFind").onclick = function () {
+  var r = readRange();
+  if (!r) { document.getElementById("say").innerHTML = "请输入整数，或范围「20,45」「20~45」。"; return; }
+  doLookup(r[0], r[1]);
+};
+document.getElementById("btnRange").onclick = function () {
+  var r = readRange();
+  if (!r) { document.getElementById("say").innerHTML = "请输入整数，或范围「20,45」「20~45」。"; return; }
+  if (r[0] === r[1]) r[1] = r[0] + 20;              // 只给了一个数：往后取 20
+  doLookup(r[0], r[1]);
+};
 document.getElementById("btnRnd").onclick = function () {
-  doInsert(Math.floor(Math.random() * 90) + 5);
+  doInsert(randomFreeKey());
 };
 document.getElementById("btnAuto").onclick = function () {
   // 连插 12 个数：故意混了顺序、乱序、重复区间，能看全 分裂 / 上提 / 长高

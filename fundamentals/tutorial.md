@@ -179,13 +179,16 @@ DENSE_RANK 并列不跳（1,1,2）——拿 01 里那两本 39 块钱的书对�
    不是 WHERE 里。WHERE 是在 JOIN 之后才筛的，
    补 NULL 的行碰上任何条件都会被干掉。
 
-6. **【LIMIT 不能帮你少扫描】**
+6. **【带 ORDER BY 的 LIMIT 不能帮你少扫描】**
    排序发生在 LIMIT 之前；没有索引时，
    该扫的行、该排的行，一行都省不掉。
-   sql_sandbox.html 的"扫描行数"就是给你看这个的。
+   不带 ORDER BY 的 `LIMIT 10` 则可以早停（拿够 10 行就收工），
+   但代价是行序不保证。sql_sandbox.html 的"扫描行数"演的是前一种。
 
 7. **【 INTEGER PRIMARY KEY 不是普通主键】**
-   在 SQLite 里它就是 rowid 的别名，是自增的行号；
+   在 SQLite 里它就是 rowid 的别名，插入时自动分配；
+   但它不是 AUTOINCREMENT——删除最后一行后，新行可能复用旧 id。
+   要严格递增且永不复用，得显式写 AUTOINCREMENT（有额外开销）。
    换成 BIGINT PRIMARY KEY 就没这待遇了。移植时要小心。
 
 8. 【02 文件跑完退出码是 1】

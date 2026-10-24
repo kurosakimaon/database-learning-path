@@ -124,6 +124,12 @@
     margin-top: 6px; padding-top: 8px; border-top: 1px dashed var(--rule);
     color: var(--ink-dim); font-size: 11.5px; line-height: 1.6;
   }
+  .schema .note b { color: var(--ink); }
+  .schema .note.alert { border-top-color: #f87171; }
+  .schema .note code {
+    background: #0b1220; border: 1px solid var(--rule); border-radius: 4px;
+    padding: 0 4px; font-family: var(--mono); color: var(--accent-2);
+  }
 
   /* 结果统计 */
   .stats { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 10px; }
@@ -225,6 +231,8 @@ LIMIT 3;</textarea>
         <button class="ex" data-q="SELECT name, age, city FROM readers WHERE age >= 30 AND city IN ('北京', '上海');">大龄沪京读者</button>
         <button class="ex" data-q="SELECT title FROM books WHERE title LIKE '%年%';">书名模糊匹配</button>
         <button class="ex" data-q="SELECT name, age FROM readers WHERE city = '广州' ORDER BY age DESC LIMIT 1;">广州最年长读者</button>
+        <button class="ex" data-q="SELECT name, city FROM readers WHERE city NOT IN ('北京', NULL);">踩坑：NOT IN 里有个 NULL</button>
+        <button class="ex" data-q="SELECT loan_id, reader_id FROM loans WHERE return_date IS NULL ORDER BY loan_id;">未归还的借阅</button>
         <span class="hint">沙盒只支持单表 SELECT，JOIN 请看动画页</span>
       </div>
     </div>
@@ -263,9 +271,30 @@ LIMIT 3;</textarea>
         <code>SELECT 列 | * | 列 AS 别名</code><br>
         <code>FROM 表</code><br>
         <code>WHERE</code> 支持 <code>= != &lt;&gt; &gt; &gt;= &lt; &lt;= AND OR NOT</code>、
-        <code>LIKE</code>（% 和 _）、<code>IS [NOT] NULL</code>、<code>IN (...)</code>、括号<br>
+        <code>LIKE</code>（% 和 _）、<code>IS [NOT] NULL</code>、<code>[NOT] IN (值, ...)</code>、括号<br>
         <code>ORDER BY 列 [ASC|DESC] [, ...]</code><br>
         <code>LIMIT n [OFFSET m]</code>
+        <br><br>
+        <b>故意没做的</b>：聚合函数（连 <code>MIN()</code> / <code>MAX()</code> 也没有）、<code>DISTINCT</code>、
+        <code>GROUP BY</code> / <code>HAVING</code>、<code>JOIN</code>、子查询、<code>LIKE ... ESCAPE</code>
+        （沙盒里 % 和 _ 没法转义成字面字符）。这些一律回 <code>01_sql_tour.sql</code> 用真 SQLite 跑。<br>
+        <b>两处别当标准 SQL 验证用</b>：① 表前缀只是被「容忍」——沙盒解析 <code>readers.name</code> 时直接丢掉点号前那段，
+        并不校验前缀指的是哪张表，所以 <code>SELECT b.name FROM readers b</code> 这种前缀写错的语句它照样放行
+        （只要列名在本表里真的存在；写成 <code>b.title</code> 还是会报「表 readers 里没有叫 title 的列」）；
+        ② 列的排序规则按文本/数字比，真数据库里还有字符集与 COLLATE（SQLite 的 <code>NOCASE</code>、
+        MySQL 的 <code>utf8mb4_bin</code>、SQL Server 的 <code>SQL_Latin1_General_CP1_CI_AS</code> 之类）在管，
+        同一个 <code>ORDER BY name</code> 结果可能不同。
+      </div>
+      <div class="note" style="border-left-color:#f87171">
+        <b>NULL 的三个坑，沙盒会真演给你看</b>：<br>
+        ① <code>col = NULL</code> / <code>col &gt; NULL</code> 一律报语法错 —— 任何比较碰上 NULL 都是 unknown，这行永远选不中，
+        判空只能写 <code>IS NULL</code> / <code>IS NOT NULL</code>。<br>
+        ② <code>NOT IN</code> 的列表里只要有一个 NULL，<b>整条 WHERE 就一行都选不出来</b>（三值逻辑：unknown 不是 true）。
+        所以子查询式的 <code>NOT IN (SELECT ...)</code> 一旦那列可空就会「神秘查不到数据」，改用
+        <code>NOT EXISTS</code> 或 <code>LEFT JOIN ... IS NULL</code>。<br>
+        ③ <code>COUNT(col)</code> 不算 NULL、<code>COUNT(*)</code> 算行、而 <code>SUM/AVG</code> 会把 NULL 行整行跳过 ——
+        更阴的是<b>全空时 <code>SUM</code> 返回 NULL 而不是 0</b>，所以库存统计一律写
+        <code>COALESCE(SUM(stock), 0)</code>。沙盒没聚合函数，这条去 <code>01_sql_tour.sql</code> 里亲手试。
       </div>
     </div>
   </div>
@@ -286,9 +315,13 @@ LIMIT 3;</textarea>
   </div>
 
   <footer>
-    想验证真货？在 PowerShell 里跑
+    想验证真货？在<b>本目录</b>下跑
     <code>sqlite3 -bail :memory: ".read 01_sql_tour.sql"</code>
-    ——沙盒里的数据和那个文件一模一样，同一句 SQL 两边结果应当一致。
+    ——沙盒里的数据（readers 10 行 / books 12 行 / loans 16 行）和那个文件是逐行核对过的，
+    同一句 SQL 两边结果应当一致。<br>
+    两处<b>故意</b>不一致：① 拿列去和 NULL 直接比（<code>age &gt; NULL</code> 这种），
+    真 SQLite 默默给你 0 行，沙盒当场报错——因为它要你记住这是个坑，不是个答案；
+    ② 沙盒没有索引、也没有提前终止，「扫描行数」永远是全表行数，别拿它当性能参考。
   </footer>
 </div>
 
@@ -743,9 +776,10 @@ Parser.prototype.parsePredicate = function () {
       this.i++;
       var rhs = this.parseOperand();
       if (op === "<>") op = "!=";
-      if (/=|!=/.test(op) && rhs.kind === "lit" && rhs.value === null) {
+      var litNull = (rhs.kind === "lit" && rhs.value === null) || (lhs.kind === "lit" && lhs.value === null);
+      if (litNull) {
         throw SqlError("不能用 " + op + " 和 NULL 比！NULL 的意思是「未知」，" +
-          "任何值与它比较结果都是 unknown，这一行永远不会被选中。" +
+          "任何值和它比较 —— =、!=、>、>=、<、<= 一个都不例外 —— 结果都是 unknown，这一行永远不会被选中。" +
           "要判空请写 列 IS NULL 或 列 IS NOT NULL。", this.sql, opTok.pos);
       }
       return { kind: "cmp", op: op, left: lhs, right: rhs };
@@ -775,14 +809,23 @@ Parser.prototype.parseOperand = function () {
    求值：三值逻辑（true / false / null=unknown）
    ===================================================================== */
 function likeToRegex(pattern) {
+  // 对齐 SQLite 的 LIKE 语义（源码里 likeInfoNorm = {'%', '_', 0, 1}，四条要点）：
+  //   1) 只有 % 和 _ 是通配符；[ ] 在 LIKE 里是普通字符（字符类只有 GLOB 才有）。
+  //   2) 大小写不敏感仅限 ASCII 字母：'ä' LIKE 'Ä' 是 0。所以逐字母展开成 [aA]，
+  //      不用正则的 i flag —— i 是 Unicode 折叠，会把 é/É、σ/Σ 也算相等。
+  //   3) _ 匹配「一个字符」，按 UTF-8 码点算，所以代理对（emoji）要当一个字符。
+  //   4) 没有 ESCAPE 子句时，反斜杠没有特殊含义。
+  var ONE = "(?:[\\uD800-\\uDBFF][\\uDC00-\\uDFFF]|[\\s\\S])";   // 一个码点
   var re = "^";
   for (var i = 0; i < pattern.length; i++) {
     var ch = pattern.charAt(i);
     if (ch === "%") { re += "[\\s\\S]*"; }
-    else if (ch === "_") { re += "[\\s\\S]"; }
+    else if (ch === "_") { re += ONE; }
+    else if (ch >= "a" && ch <= "z") { re += "[" + ch + ch.toUpperCase() + "]"; }
+    else if (ch >= "A" && ch <= "Z") { re += "[" + ch.toLowerCase() + ch + "]"; }
     else { re += ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
   }
-  return new RegExp(re + "$", "i");   // i：ASCII 字母大小写不敏感，与 SQLite 一致
+  return new RegExp(re + "$");
 }
 
 function cmpValues(a, b) {
@@ -821,12 +864,14 @@ function evalExpr(node, row, self) {
     }
     case "isnull": {
       var v2 = evalOperand(node.operand, row, self);
+      self.cmpCount++;          // IS NULL 也是一次逐行判断，别让它从账上消失
       var isNull = (v2 === null);
       return node.neg ? !isNull : isNull;
     }
     case "like": {
       var lhs = evalOperand(node.operand, row, self);
       var pat = evalOperand(node.pattern, row, self);
+      self.cmpCount++;          // 同上：模式匹配比 = 更贵，不是不要钱
       if (lhs === null || pat === null) return null;
       var hit = likeToRegex(String(pat)).test(String(lhs));
       return node.neg ? !hit : hit;
@@ -834,13 +879,16 @@ function evalExpr(node, row, self) {
     case "in": {
       var v3 = evalOperand(node.operand, row, self);
       if (v3 === null) return null;
-      var found = false;
+      var found = false, sawNull = false;
       for (var i = 0; i < node.list.length; i++) {
         var item = evalOperand(node.list[i], row, self);
-        if (item === null) continue;
+        if (item === null) { sawNull = true; continue; }   // v = NULL 得 unknown，先记下，接着找
         self.cmpCount++;
         if (cmpValues(v3, item) === 0) { found = true; break; }
       }
+      // IN 就是 OR 的展开：没匹配上、但列表里有个 NULL → 结果是 unknown，不是 false。
+      // 于是 NOT IN 一旦沾上 NULL 就永远不为真 —— 整张表被悄悄吞掉的那个经典事故。
+      if (!found && sawNull) return null;
       return node.neg ? !found : found;
     }
     case "cmp": {
@@ -989,12 +1037,16 @@ function buildExplanation(ast, res) {
   }
 
   if (ast.limit !== null) {
-    bits.push("<code>LIMIT " + ast.limit + "</code> 只影响<b>输出</b>几行，" +
-              "它发生在排序之后：该扫的行、该排的行，一行都没少省。真想少扫描，得靠 WHERE + 索引。");
+    bits.push("<code>LIMIT " + ast.limit + "</code> 在<b>沙盒里</b>只截断输出，扫描和排序照旧一行不少。" +
+              "真实数据库里它能不能省活儿，要看有没有 ORDER BY：<b>没有 ORDER BY</b>，" +
+              "引擎凑够 n 行就提前收工（SQLite / MySQL / PostgreSQL 都这样）——代价是<b>返回哪 n 行不保证</b>，" +
+              "同一条 SQL 两次可能给出不同的行；<b>有 ORDER BY</b>，必须先排完才能截断，一行都省不了，" +
+              "除非索引的顺序正好等于 ORDER BY 的顺序，那才会退化成「沿索引走 n 行就停」的 top-N。");
   }
 
-  bits.push("一句话：<b>全表扫描 " + res.scanned + " 行 → 命中 " + res.kept + " 行 → 输出 " +
-            res.rows.length + " 行</b>。扫描行数不随 LIMIT 变小，这就是没有索引的代价。");
+  bits.push("一句话（沙盒口径）：<b>全表扫描 " + res.scanned + " 行 → 命中 " + res.kept + " 行 → 输出 " +
+            res.rows.length + " 行</b>。沙盒没有索引、也没有提前终止，所以扫描行数永远是全表；" +
+            "真数据库里这两个「省活儿」分别由索引和 LIMIT（无 ORDER BY 时）决定。");
   return bits.join(" ");
 }
 

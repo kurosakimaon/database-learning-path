@@ -1173,8 +1173,11 @@ int runMain() {
                   << "，读页 " << qa.plan[0] << "\n";
         std::cout << "  全表查 name=u12345：" << qb.rows.size() << " 行，" << ms(heapMs)
                   << "，读页 " << qb.plan[0] << "\n";
+        char ratioBuf[32];
+        std::snprintf(ratioBuf, sizeof ratioBuf, "%.1f",
+                      heapMs / (idxMs > 0.0001 ? idxMs : 0.0001));
         std::cout << "  同一台引擎同一张表，换个谓词就是 "
-                  << (heapMs / (idxMs > 0.0001 ? idxMs : 0.0001)) << " 倍差距\n";
+                  << ratioBuf << " 倍差距\n";
         bool ok = (qa.rows.size() == want) && qb.rows.size() == 1 &&
                   (qa.rows.size() > 0 && qb.rows.size() > 0);
         std::cout << "  对账：索引行数与手算一致 " << (qa.rows.size() == want ? "✓" : "✗")

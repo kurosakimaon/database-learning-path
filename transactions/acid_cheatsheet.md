@@ -24,20 +24,20 @@
                                               checkpoint 把脏页刷回数据文件
 ```
 
-提交 = WAL 里一条 commit 记录 fsync 成功。**数据页本身还没落盘**，断电了照样能重放回来——这就是"每组提交只付一次顺序写"的便宜。SQLite 的 `PRAGMA journal_mode=WAL`、`synchronous=FULL/NORMAL` 的差别就在 fsync 的时机上：NORMAL 模式下 WAL 不每组 fsync，省电但断电可能丢最近几组提交（01 的 SQL 里实测过模式切换）。
+提交 = WAL 里一条 commit 记录 fsync 成功（`synchronous=FULL` 时）。**数据页本身还没落盘**，断电了照样能重放回来——这就是"每组提交只付一次顺序写"的便宜。SQLite 的 `PRAGMA journal_mode=WAL`、`synchronous=FULL/NORMAL` 的差别就在 fsync 的时机上：NORMAL 模式下 WAL 不每组 fsync，省电但断电可能丢最近几组提交（01 的 SQL 里演示过模式切换；真正的掉电丢数据没法在脚本里安全实测）。
 
 ## 二、隔离级别对照表（核心中的核心）
 
-| 隔离级别 | 脏读 | 不可重复读 | 丢失更新* | 典型实现 |
-|---|---|---|---|---|
-| READ UNCOMMITTED | ✘ 会 | ✘ 会 | ✘ 会 | 几乎没人用；SQLite shared-cache + `read_uncommitted=1`（03 实验 A 就是这么造出来的） |
-| READ COMMITTED | ✔ 挡住 | ✘ 会 | ✘ 会 | 语句级快照。**PostgreSQL、Oracle、SQL Server 默认** |
-| REPEATABLE READ | ✔ | ✔ 挡住 | 视实现**未必** | 事务级快照。InnoDB 额外上**间隙锁**管幻读，**MySQL 默认** |
-| SERIALIZABLE | ✔ | ✔ | ✔ | 读也加锁（或冲突即 abort），吞吐最惨 |
+| 隔离级别 | 脏读 | 不可重复读 | 幻读 | 丢失更新* | 典型实现 |
+|---|---|---|---|---|---|
+| READ UNCOMMITTED | ✘ 会 | ✘ 会 | ✘ 会 | ✘ 会 | 几乎没人用；SQLite shared-cache + `read_uncommitted=1`（03 实验 A 就是这么造出来的） |
+| READ COMMITTED | ✔ 挡住 | ✘ 会 | ✘ 会 | ✘ 会 | 语句级快照。**PostgreSQL、Oracle、SQL Server 默认** |
+| REPEATABLE READ | ✔ | ✔ 挡住 | 标准下会；InnoDB 当前读用间隙锁挡住 | 视实现**未必** | 事务级快照。**MySQL 默认** |
+| SERIALIZABLE | ✔ | ✔ | ✔ | ✔ | 读也加锁（或冲突即 abort），吞吐最惨 |
 
-\* 标准只列了脏读/不可重复读/幻读三异常，但**丢失更新才是实战中最疼的**：两个"读—改—写"各自基于旧值写回，后写的把前者的更新抹掉。注意：**RR 级别的快照读并不能防丢失更新**——InnoDB 的快照 UPDATE 会读到旧值再写回旧值+delta，照样丢（03 实验 C.1 实测）。防它只有三条路：
+\* 标准只列了脏读/不可重复读/幻读三异常，但**丢失更新才是实战中最疼的**：两个"读—改—写"各自基于旧值写回，后写的把前者的更新抹掉。注意：**RR 的快照读并不能防丢失更新**——两个事务都从快照读出 v=1，各自在应用层算成 2，再执行 `UPDATE t SET v=2`，后写覆盖前写（03 实验 C.1 用 SQLite 实测；InnoDB 里也是同一套 read-modify-write 模型）。防它只有三条路：
 
-1. **单条 SQL 原子更新**：`UPDATE t SET v = v + 1`（数据库内部拿行锁做原子加，03 修法①，300 个并发一次不丢）；
+1. **单条 SQL 原子更新**：`UPDATE t SET v = v + 1`（数据库内部拿行锁做原子加，03 修法①，2 线程 × 150 次 = 300 次并发自增一次不丢）；
 2. **悲观锁**：`SELECT ... FOR UPDATE` 先锁再改（03 修法②）；
 3. **乐观锁**：版本号 CAS，`UPDATE ... WHERE id=1 AND version=?`，失败重试（03 修法③）。
 
@@ -49,9 +49,9 @@
 
 ### 各家默认值（记住够用）
 
-- MySQL/InnoDB：**REPEATABLE READ** + 间隙锁（gap lock）防幻读，别被"标准说 RR 防不了幻读"绕晕——InnoDB 自己加码了。
-- PostgreSQL / SQL Server / Oracle：**READ COMMITTED**（PG 实际是快照隔离 SI，比标准 RC 略强，但会有写 skew）。
-- SQLite：默认就是"整个库一个快照"级别的串行化；shared-cache 模式下才有表级读写锁冲突（`SQLITE_LOCKED`/`SQLITE_BUSY`，03/02 都撞过）。
+- MySQL/InnoDB：**REPEATABLE READ**；当前读（UPDATE / `SELECT ... FOR UPDATE`）用 Next-Key Lock（含间隙锁）防幻读，快照读靠事务级 read view。别被"标准说 RR 防不了幻读"绕晕——InnoDB 自己加码了。
+- PostgreSQL / SQL Server / Oracle：**READ COMMITTED**。PostgreSQL 的 RC 是语句级快照；它的 REPEATABLE READ 实现是快照隔离（SI），可能有写偏斜（write skew）。
+- SQLite：默认提供 **SERIALIZABLE**。回滚日志模式下读写互斥；WAL 模式下读用快照、写仍是单写者（多读单写），shared-cache 模式下还会出现表级锁冲突（`SQLITE_LOCKED`/`SQLITE_BUSY`，03/02 都撞过）。
 
 ## 三、死锁排查套路（线上保命用）
 
@@ -78,11 +78,11 @@ SELECT * FROM pg_locks WHERE NOT granted;
 
 **预防清单**（按性价比排序）：
 
-- 所有路径按**同一全序**取锁：批量更新先按主键排序（04 演示 4：随机序死锁率 11.6%，排序后 0%）；
+- 所有路径按**同一全序**取锁：批量更新先按主键排序（04 演示 4：4 线程 × 80 次转账，随机序**回滚率**本机连跑 9.6%~12.8%，排序后 0%；具体数值每次跑都会浮动，别背数字，要背的是"排序后归零"这个结论。注意程序报的是**回滚率 = 死锁 + 拿锁超时**，不是纯死锁率——这一版并发下超时为 0，所以两个数恰好相等）；
 - 事务**尽量短**：别让 COMMIT 前面隔着一次 HTTP 调用；
 - 热点行拆散（分片计数）或排队化（单线程队列吞更新）；
 - 用 `SELECT ... FOR UPDATE SKIP LOCKED` 做任务队列，天然绕开排队互等；
-- C++ 本地同款：多把 mutex 一律 `std::scoped_lock(m1, m2)`，它内部统一加锁顺序，反序手写 `lock(m1); lock(m2)` 必死。
+- C++ 本地同款：多把 mutex 用 `std::scoped_lock(m1, m2)`，它内部调用 `std::lock` 的死锁避免算法（try-and-back-off），同时锁住多把；但它**不是**按地址排序，也不等于全局加锁顺序。反序手写 `lock(m1); lock(m2)` 必死。
 
 **受害者怎么办**：收到 1213 后**整个事务从头重试**（不是补第二条语句！04 演示 3 实测），重试次数封顶 + 指数退避，别写死循环。
 

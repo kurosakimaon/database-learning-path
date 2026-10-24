@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>一条 SQL 的旅程 — 从字符串到结果的五道工序</title>
+<title>一条 SQL 的旅程 — 从字符串到结果的六道工序</title>
 <style>
   :root {
     --bg: #0f172a;
@@ -136,7 +136,7 @@
 </head>
 <body>
 
-<h1>一条 SQL 的<span class="hl">旅程</span>：从字符串到结果的五道工序</h1>
+<h1>一条 SQL 的<span class="hl">旅程</span>：从字符串到结果的六道工序</h1>
 <div class="sub">
   查询：<code>SELECT u.name FROM users u JOIN orders o ON u.id=o.uid WHERE o.amount&gt;100</code>
   &nbsp;·&nbsp; 与 02_cost_model.cpp 演的是同一条、同一套账（users 5000 行 / orders 50000 行）
@@ -182,8 +182,8 @@ var STAGES = [
 var EXEC = {
   build:  [0, 1800, 5000],   // 哈希表已插入行数
   scanned: [0, 0, 6200, 50000], // orders 已扫行数
-  passed: [0, 0, 6140, 49500],  // 过滤后放行行数
-  out:    [0, 0, 6138, 49500]   // join 输出行数
+  passed: [0, 0, 6138, 49500],  // 过滤后放行行数（6200 × 99%）
+  out:    [0, 0, 6138, 49500]   // join 输出行数（本例 uid 不悬空，放行 = 输出）
 };
 
 // ---------- 每一步 ----------
@@ -216,9 +216,10 @@ var STEPS = [
     '<h3>第 1 道工序（上）：词法分析 — 把字符串剁成 token<span class="tag2">解析器</span></h3>' +
     '<p>解析器第一步跟 C++ 编译器一模一样：把字符流剁成有意义的词：</p>' +
     '<pre>[<span class="kw">SELECT</span>] [<span class="id">u</span>][<span class="op">.</span>][<span class="id">name</span>]\n[<span class="kw">FROM</span>] [<span class="id">users</span>][<span class="id">u</span>] [<span class="kw">JOIN</span>] [<span class="id">orders</span>][<span class="id">o</span>]\n[<span class="kw">ON</span>] [<span class="id">u</span>][<span class="op">.</span>][<span class="id">id</span>][<span class="op">=</span>][<span class="id">o</span>][<span class="op">.</span>][<span class="id">uid</span>]\n[<span class="kw">WHERE</span>] [<span class="id">o</span>][<span class="op">.</span>][<span class="id">amount</span>][<span class="op">&gt;</span>][<span class="num">100</span>][<span class="op">;</span>]</pre>' +
-    '<p class="muted">关键字？标识符？数字？运算符？—— 一个个贴标签。拼错一个字母，这里就报 syntax error。</p>',
+    '<p class="muted">关键字？标识符？数字？运算符？—— 一个个贴标签。这一步只认字形：' +
+    '少了个 T 写成 <code>SELEC</code>，切出的词对不上任何文法，报错就在这里。</p>',
   ptitle: "工序 1 · 词法分析",
-  pin: "一串字符（46 个字节）",
+  pin: "一串字符（74 个字节）",
   pout: "一串 token（关键字/标识符/运算符/字面量）\n\n此时还不知道 u 是什么 —— 词法只管切词，不管含义。"
 },
 {
@@ -232,7 +233,7 @@ var STEPS = [
     '你写的 JOIN 顺序（users 在前）在这里还只是字面意思。</p>',
   ptitle: "工序 1 · 语法分析",
   pin: "token 流",
-  pout: "语法树（AST）\n\n输入 SELECT u.naem ... → 到这里就死了：\nnear \"n\": syntax error。\n解析器是唯一「讲语法」的一道工序。"
+  pout: "语法树（AST）\n\n输入 SELEC u.name ... → 到这里就死了：\nnear \"SELEC\": syntax error。\n\n但拼错<b>列名</b>（u.naem）能活着过这一关——\n树只管结构，不知道 users 到底有几列。\n那笔账要到第 2 道工序对数据字典时才清算：\nno such column: u.naem。\n解析器是唯一「讲语法」的一道工序。"
 },
 
 // ---- 工序 2：重写 ----
@@ -253,11 +254,14 @@ var STEPS = [
   stage: 2,
   html:
     '<h3>第 2 道工序（下）：你写的顺序 ≠ 执行的顺序<span class="tag2">重写器</span></h3>' +
-    '<p>你写的是 <code>FROM users u JOIN orders o</code> —— users 在前。但改写后是' +
-    '<code>FROM orders, users</code>：<b class="hl">SQLite 把表序翻了个（按名字/行数启发式先挪一挪）。</b></p>' +
-    '<p>更关键的在后面：这只是"初稿"。真正的表序决定权在优化器手里——' +
-    '03 演练题第 10 题里 SQLite 实测把 5 万行 users 选成驱动表，把 100 万行 orders 翻成了内表，' +
-    '跟你写的顺序完全相反。</p>' +
+    '<p>你写的是 <code>FROM users u JOIN orders o</code> —— users 在前。内连接改写后，' +
+    'ON 条件被拆进 WHERE 约束列表：<code>FROM users u, orders o WHERE o.amount&gt;100 AND o.uid=u.id</code>。' +
+    '<b class="hl">这一步只是等价改写，不等于最终执行顺序。</b></p>' +
+    '<p>真正的表序决定权在优化器手里——' +
+    '03 演练题第 11 题写的是 <code>FROM coupons c JOIN orders o</code>（coupons 只有 1,000 行，摆在前头），' +
+    'SQLite 实测却<b class="hl">先 SCAN orders 那 100 万行</b>，再回头用临时索引点查 coupons——' +
+    '跟你写的顺序正好相反。第 10 题则更安静：你写的顺序碰巧就是最优顺序，' +
+    '所以看不出优化器动手了，但它那笔账照样算过。</p>' +
     '<div class="key"><b>记住这句话：</b>SQL 是<b>声明语言</b>——你说"要什么"，' +
     '不说"怎么做"。从"要什么"到"怎么做"的翻译，就是重写 + 优化这两道工序。</div>',
   ptitle: "工序 2 · 顺序自由",
@@ -274,10 +278,13 @@ var STEPS = [
     '<pre><span class="hl">A</span> 全表扫 orders（顺带过滤）→ <span class="hl">Hash Join</span>（users 建哈希表）\n' +
     '<span class="gold">C</span> idx_amount 范围扫 → 回表取 uid → <span class="gold">Index Nested Loop</span>（逐行点查 users 主键）\n\n' +
     '<span class="cmt">（真实优化器还枚举 B 全表NL、D 排序归并，见 02_cost_model.cpp；\n  本页挑两个最有代表性的对比）</span></pre>' +
+    '<p class="muted">先挂个丑话：A 里的 <b>Hash Join 是教科书算子</b>，' +
+    'SQLite 3.51 源码里一个 hash join 都搜不到，它只会 nested loop（工序 4 有实测 EQP）。' +
+    '这一页拿它讲<b>代价</b>，讲完再讲<b>算子</b>，两头都不吃亏。</p>' +
     '<p>两个候选乍看都对："C 用上了索引，肯定比 A 傻扫快吧？"—— <b class="bad">账不是这么算的。</b>' +
     '下一页，摊开算。</p>',
   ptitle: "工序 3 · 枚举",
-  pin: "逻辑计划 + 统计信息：\n  orders：50000 行 / 500 页，idx_amount 树高 3\n  users：5000 行 / 50 页，主键树高 2\n  amount>100 选择率：99%（统计是新的）",
+  pin: "逻辑计划 + 统计信息：\n  orders：50000 行 / 500 页，主键树高 3\n         idx_amount 树高 2\n  users：5000 行 / 50 页，主键树高 2\n  amount>100 选择率：99%（统计是新的）",
   pout: "候选计划清单（≥2 个），\n每个都还没算分。"
 },
 {
@@ -285,7 +292,8 @@ var STEPS = [
   html:
     '<h3>第 3 道工序（中）：给每个候选记账<span class="tag2">代价模型</span></h3>' +
     '<p class="muted">公式（02_cost_model.cpp 同款）：<b>代价 = 页读 × 1.0 + 比较 × 0.005</b>。' +
-    '一页磁盘读 ≈ 十万次比较，所以页权重大得离谱。</p>' +
+    '按这套汇率，<b>读一页 = 200 次比较</b>——它已经把 IO 捧得很高了，' +
+    '而真实硬件更夸张（一次随机读 ≈ 100μs，够做十万次比较，见第 2 关）。</p>' +
     '<table class="cost">' +
     '<tr><th class="l">候选</th><th>页读</th><th>比较</th><th>代价</th></tr>' +
     '<tr class="pick"><td class="l">★ A 全表扫 + Hash Join</td><td>550</td><td>104,500</td><td>1,072.5</td></tr>' +
@@ -310,13 +318,13 @@ var STEPS = [
     '<b class="gold">前提是统计是新的</b>（知道 amount&gt;100 命中 99%）。</p>' +
     '<p>02_cost_model.cpp 里演过反面剧本：统计过期（还以为只命中 0.1%，50 行）时，' +
     '同一套算账逻辑会"正确地"选 C——50 次回表当然便宜。可真实要回表 49500 次，' +
-    '实际比 A 慢 <b class="bad">973 倍</b>。</p>' +
+    '实际代价是 A 的 <b class="bad">142 倍</b>（C 自己估 157、实际 152710，估错 973 倍）。</p>' +
     '<div class="key"><b>师傅点拨：</b>优化器的锅，一半在算账，一半在料。' +
     '计划诡异先别骂引擎，<code class="gold">ANALYZE</code> 一下再来。SQLite 里它填的正是' +
     'sqlite_stat1 这本账。</div>',
   ptitle: "工序 3 · 拍板",
   pin: "打分表",
-  pout: "选中的物理计划：\n  SCAN o (USE COVERING...)\n  → BUILD哈希(u)\n  → PROBE\n\n—— 这就是 EXPLAIN QUERY PLAN\n给你看的那几行的来源。"
+  pout: "选中的物理计划：\n  SCAN o\n  → SEARCH u USING INTEGER PRIMARY KEY (rowid=?)\n\n—— 这就是 EXPLAIN QUERY PLAN\n给你看的那两行（实测输出）。\n\n注意：SQLite 没有 hash join 算子，\n它只会 nested loop；下一页拿\nHash Join 讲原理，别去 EQP 里找它。"
 },
 
 // ---- 工序 4：执行器（火山模型） ----
@@ -329,13 +337,22 @@ var STEPS = [
     '<code class="hl">next()</code>：被上层调一次，吐一行；吐光了说 EOF。' +
     '跟 C++ 迭代器 <code>iterator::operator++</code> 一个签名一个意思：</p>' +
     '<pre>class Op {\n  <span class="kw">Row</span>* <span class="hl">next</span>();   <span class="cmt">// 拉一行；返回 0 表示没了</span>\n  <span class="kw">void</span> close();\n};</pre>' +
-    '<p>看右下的算子树（本页最核心的图）：顶上 Root 是"输出 u.name"，' +
+    '<p>看下方这张算子树（本页最核心的图）：顶上 Root 是"输出 u.name"，' +
     '下面挂着 Hash Join，Join 的左手是 过滤←orders全扫，右手是 users 全扫（负责建表）。</p>' +
+    '<div class="key"><b>先说清楚一件事（免得你去 EQP 里对号入座）：</b>' +
+    '这棵树是<b>教科书版的 Hash Join</b>，跟 01_join_algorithms.cpp 里手搓的那个同源。' +
+    '<b class="bad">SQLite 到今天（3.51）没有 hash join 算子</b> —— 源码里一个都搜不到，' +
+    '它只会 nested loop。同一条 SQL 在 sqlite3 里实测是：' +
+    '<pre>SCAN o\n`--SEARCH u USING INTEGER PRIMARY KEY (rowid=?)</pre>' +
+    '行来源一样，算子不同：SQLite 是「orders 每行 → 回 users 点查一次主键树」。' +
+    '真要有 Hash Join，得换 <b class="gold">MySQL 8.0.18+</b> 或 <b class="gold">PostgreSQL</b>。' +
+    '<br>为什么还要学它？因为 01 的实测里它比 Index NL 快 7 倍上下（0.29ms vs 2.15ms），而且' +
+    '<b>代价模型、火山模型、BUILD/PROBE 这套概念在哪家引擎都长一样</b>。</div>' +
     '<div class="key"><b>火山模型的本质：</b>数据不是被"推"下来的，' +
     '是被上层 one row at a time <b>拉</b>上去的。控制流自上而下，数据流自下而上。</div>',
   ptitle: "工序 4 · 算子树",
   pin: "物理计划（优化器的拍板）",
-  pout: "算子树（见左侧图）。\n每个算子封装一小段活儿，\n接口统一得让上层根本\n不关心下层是谁。"
+  pout: "算子树（见下方图）。\n每个算子封装一小段活儿，\n接口统一得让上层根本\n不关心下层是谁。"
 },
 {
   stage: 4,
@@ -361,21 +378,21 @@ var STEPS = [
     '<p class="muted">这就是 01 里 Hash Join 完胜的底气之一：5000 行 × 每行一次哈希插入，' +
     '总共 5000 次操作。右边 users 扫完，才会去动左边的 orders。</p>',
   ptitle: "工序 4 · BUILD 阶段",
-  pin: "右手输入：users 全扫\n正在读第 36/50 页\n（计数见左图底部：1,800 / 5000）",
+  pin: "右手输入：users 全扫\n正在读第 18/50 页\n（计数见下方图底部：1,800 / 5000）",
   pout: "内存哈希表：\n  key = u.id\n  value = u.name\n5000 个槽位就位。\n\n比较次数：5000（每行一次插入）。"
 },
 {
   stage: 4,
-  exec: { phase: 'probe', b: 2, sc: 1, pa: 1, ou: 1, call: 0, row: 1 },
+  exec: { phase: 'probe', b: 2, sc: 2, pa: 2, ou: 2, call: 0, row: 1 },
   html:
     '<h3>第 4 道工序（四）：PROBE — 一行数据的完整旅程<span class="tag2">火山模型</span></h3>' +
-    '<p>哈希表就绪，Join 伸手向左手要行。<b class="hl">右边的上箭头</b>是一行 orders 的旅程：</p>' +
-    '<pre>① Scan(orders).next()   → (uid=123, amount=8848, ...)   <span class="cmt">// 从第 37 页拉出一行</span>\n② Filter.next()         → amount=8848 <span class="good">&gt; 100 ✓ 放行</span>\n③ Join：hash.find(<span class="hl">123</span>) → <span class="good">命中</span> "user_123"\n④ Root：只留 name 列 → 吐给客户端</pre>' +
+    '<p>哈希表就绪，Join 伸手向左手要行。<b class="hl">左边的上箭头</b>是一行 orders 的旅程：</p>' +
+    '<pre>① Scan(orders).next()   → (uid=123, amount=8848, ...)   <span class="cmt">// 从第 62/500 页拉出一行</span>\n② Filter.next()         → amount=8848 <span class="good">&gt; 100 ✓ 放行</span>\n③ Join：hash.find(<span class="hl">123</span>) → <span class="good">命中</span> "user_123"\n④ Root：只留 name 列 → 吐给客户端</pre>' +
     '<p>这一行共花：1 次页内读取 + 1 次比较(过滤) + 1 次哈希查找 ≈ <b class="good">2 次比较</b>。' +
-    '同等信息量，01 里 Index Join 每行要走两趟 B+ 树做 14 次比较——算法的差距就是在这一步一步攒出来的。</p>',
+    '同等信息量，01 里 Index Join 每行要沿 users 主键树（2 层）二分下来，实测平均 11.4 次比较——算法的差距就是在这一步一步攒出来的。</p>',
   ptitle: "工序 4 · 单行旅程",
   pin: "orders 第 6,200 行：\n  uid=123, amount=8848",
-  pout: "比较三笔账（本行）：\n  过滤 1 次\n  哈希探测 1 次\n  join 命中 → 输出 1 行\n\n累计输出 6,138 行（见左图）。\n后面还要再来 43,362 次。"
+  pout: "比较三笔账（本行）：\n  过滤 1 次\n  哈希探测 1 次\n  join 命中 → 输出 1 行\n\n累计输出 6,138 行（见下方计数器）。\n后面还要再来 43,362 次。"
 },
 {
   stage: 4,
@@ -391,10 +408,11 @@ var STEPS = [
     '<tr><td class="l">过滤放行</td><td>49,500 行</td><td class="l">99% 选择率（索引此刻帮倒忙的根源）</td></tr>' +
     '<tr class="pick"><td class="l">join 输出</td><td>49,500 行</td><td class="l">全部命中（uid 无悬空时）</td></tr>' +
     '</table>' +
-    '<p class="muted">总账：550 页 + 约 104,500 次比较 ≈ 优化器估的 1,072.5 —— 估得准，因为统计新。</p>',
+    '<p class="muted">总账：550 页 × 1.0 + 约 104,500 次比较 × 0.005 = <b class="good">1,072.5</b> ——' +
+    '和优化器估的是同一个数，因为统计新。</p>',
   ptitle: "工序 4 · 收官",
   pin: "orders 逐行供给\n（500 页顺序读）",
-  pout: "49,500 行输出流\n逐行交给 Root。\n\n实测（01 同规模，量级）：\nHash ~0.8ms <\nSort-Merge ~2.4ms <\nIndex Join ~2.8ms <<\n块嵌 NL ~150ms。"
+  pout: "49,500 行输出流\n逐行交给 Root。\n\n实测（01 同规模，本机反复跑）：\nHash 0.30ms ＜ Sort-Merge 1.79ms\n＜ Index Join 2.2~2.3ms ≪ BNL 122~133ms。\n换台机器数字会漂，量级差不会。"
 },
 
 // ---- 工序 5：结果 ----
@@ -408,11 +426,12 @@ var STEPS = [
     '<table class="res"><tr><th>name</th></tr><tr><td>user_123</td></tr><tr><td>user_7</td></tr>' +
     '<tr><td>user_4501</td></tr><tr><td class="cmt">…（49,497 行）</td></tr></table>' +
     '<div class="key"><b>全程复盘：</b>字符串 → token → 语法树 → 约束列表 → 候选×代价 → 算子树 → 行流。' +
-    '六道工序，一道都不能少。<b>EXPLAIN QUERY PLAN 打印的，就是第四道工序的产物。</b>' +
+    '五道加工工序（外加工序 0 的"原样接手"），一道都不能少。' +
+    '<b>EXPLAIN QUERY PLAN 打印的，正是第三道工序——优化器拍板的那个计划</b>（它还没开跑，跑出来才是第四道工序）。' +
     '所以看得懂代价，才看得懂计划——这就是本关把 02（会计）排在 03（读计划）前面的原因。</div>',
   ptitle: "全旅程总结",
   pin: "算子树输出的 49,500 行",
-  pout: "客户端拿到的结果集。\n\n六道工序各干了啥：\n① 切词 ② 搭树 ③ 拆平\n④ 算账选计划 ⑤ 拉数据\n⑥ 流式回传\n\n下一步：打开 sqlite3，\n用 EXPLAIN QUERY PLAN 亲眼看。"
+  pout: "客户端拿到的结果集。\n\n六道工序各干了啥（页顶那条带子）：\n0 原样接手\n1 切词 + 搭语法树\n2 对字典 + 拆平条件\n3 算账选计划 ← EQP 打印的就是这步\n4 火山模型拉数据\n5 流式回传\n\n下一步：打开 sqlite3，\n用 EXPLAIN QUERY PLAN 亲眼看。"
 }
 ];
 

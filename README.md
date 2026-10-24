@@ -19,9 +19,9 @@
 |------|------|------|----------|
 | 第 1 关 · 筑基期 | [`fundamentals/`](fundamentals/) | 关系模型与 SQL | 表/关系代数、JOIN 可视化、SQL 练习沙盒 |
 | 第 2 关 · 炼气期 | [`storage_index/`](storage_index/) | 存储与索引 | 页与磁盘 I/O、B+ 树交互动画、缓冲池动画、索引实测 |
-| 心法期 | [`transactions/`](transactions/) | 事务与 ACID | 隔离级别异常实验台、MVCC 动画、锁与死锁、ACID 速查表 |
+| 第 3 关 · 心法期 | [`transactions/`](transactions/) | 事务与 ACID | 隔离级别异常实验台、MVCC 动画、锁与死锁、ACID 速查表 |
 | 第 4 关 · 兵器期 | [`cpp_integration/`](cpp_integration/) | C++ 接入数据库 | SQLite C API、RAII 封装、线程池+连接池、MySQL/ORM |
-| 第 5 关 · 结丹期 | [`query_internals/`](query_internals/) | 查询内幕 | JOIN 三算法实测、代价模型、EXPLAIN 流水线动画、WAL 崩溃恢复 |
+| 第 5 关 · 结丹期 | [`query_internals/`](query_internals/) | 查询内幕 | JOIN 四算法实测、代价模型、EXPLAIN 流水线动画、WAL 崩溃恢复 |
 | 第 6 关 · 轻剑期 | [`nosql_distributed/`](nosql_distributed/) | NoSQL 与分布式 | 数据模型对比、LSM vs B+ 树动画、CAP 动画、并发原语 |
 | 第 7 关 · 手搓期 | [`minidb/`](minidb/) | 手搓 miniDB | 六个阶段从零造一个迷你数据库：Pager → 堆表 → B+ 树 → WAL → SQL 前端 → 压测 |
 
@@ -59,11 +59,11 @@ database-learning-path/
 ├── 数据库学习路线图.html   # 总地图（入口）
 ├── fundamentals/           # 第 1 关 筑基期 · 关系模型与 SQL
 ├── storage_index/          # 第 2 关 炼气期 · 存储与索引
-├── transactions/           # 心法期 · 事务与 ACID
+├── transactions/           # 第 3 关 心法期 · 事务与 ACID
 ├── cpp_integration/        # 第 4 关 兵器期 · C++ 接入数据库
 ├── query_internals/        # 第 5 关 结丹期 · 查询内幕
 ├── nosql_distributed/      # 第 6 关 轻剑期 · NoSQL 与分布式
 └── minidb/                 # 第 7 关 手搓期 · 迷你数据库
 ```
 
-统计：**22 个可编译 C++ 示例 · 18 个离线交互 HTML · 7 份教程 · 5 份 SQL 练习**。
+统计：**22 个可编译 C++ 示例 · 10 个离线交互动画 · 7 份教程 · 5 份 SQL 练习**（另有 7 个导航页和 1 张总路线图）。

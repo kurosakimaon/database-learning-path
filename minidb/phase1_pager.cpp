@@ -45,9 +45,9 @@ namespace {
 
 // ---------------------------------------------------------------------------
 // 为什么是 4096？三条理由，面试问烂了，但你亲手写过才算你的：
-//   1) 等于 x86 一页内存、等于绝大多数文件系统的 block 大小、等于 NVMe 的原生
-//      扇区大小（老盘是 512，现在都 4Kn）。页=4KB 时，一次写盘不会被拆成两个
-//      扇区，才有资格谈"原子写"（撕裂页问题，phase4 会正面撞上）。
+//   1) 对齐 x86 一页内存、绝大多数文件系统的 block 大小；4Kn 盘的原生扇区
+//      也是 4KB（注意 512e 盘逻辑扇区仍是 512B）。对齐写能少一次读-改-写，
+//      但 4KB 写本身**不保证原子**——断电可能只落下半页（撕裂页，phase4 正面撞）。
 //   2) 太大：一次点查要读一整页，浪费 IO 和缓存；太小：元数据开销、寻址次数爆炸。
 //   3) SQLite 默认 4096，PostgreSQL 默认 8192，InnoDB 默认 16384。都是这个量级。
 // ---------------------------------------------------------------------------
@@ -101,13 +101,16 @@ public:
     Pager(const std::string &path, size_t cacheCapacity, bool createIfMissing) {
         path_ = path;
         cap_ = std::max<size_t>(1, cacheCapacity);
-        std::fstream probe(path, std::ios::in | std::ios::binary);
+        // 用 fopen 探存在性：部分 libstdc++ 下 fstream 以 in 打开缺失文件时
+        // 虽未真正打开，failbit 却不置位，if (!probe) 会误判为"文件存在"。
+        std::FILE *probe = std::fopen(path.c_str(), "rb");
         if (!probe) {
             if (!createIfMissing) {
                 throw std::runtime_error("文件不存在且未允许创建: " + path);
             }
             formatNew();
         } else {
+            std::fclose(probe);
             openExisting();
         }
     }

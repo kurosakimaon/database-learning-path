@@ -262,7 +262,7 @@
       <a class="card" href="01_disk_and_page.cpp">
         <div class="no">STEP 01 · 地基</div>
         <div class="title"><code>01_disk_and_page.cpp</code></div>
-        <div class="desc">手写三件套：4096 字节槽式页（变长记录 + 页内偏移）、Pager（seekg/seekp 整页读写）、Buffer Pool（LRU + 脏页写回 + pin）。盯输出里"命中率爬到 80%"和"淘汰页 #2（脏页，写回磁盘）"。</div>
+        <div class="desc">手写三件套：4096 字节槽式页（变长记录 + 页内偏移）、Pager（seekg/seekp 整页读写）、Buffer Pool（LRU + 脏页写回 + pin）。盯输出里"命中率 80%"被一条大表扫描打到"44.4%"的那次跳水，和"淘汰 页 #2（脏页，写回磁盘）"那行——写账本的时刻。</div>
         <div class="tags"><span class="tag star">★ C++ 单文件</span><span class="tag live">g++ 直接编译</span></div>
       </a>
       <a class="card" href="02_btree_vs_sorted_array.cpp">
@@ -280,13 +280,13 @@
       <a class="card" href="btree_animator.html">
         <div class="no">TOOL · 最重要的教具</div>
         <div class="title"><code>btree_animator.html</code></div>
-        <div class="desc">阶 4 的 B+ 树插入动画：插入 / 随机 / 自动连插 12 个 / 撤销 / 重置。右侧实时显示比较次数、页读取次数、树高；分裂、复制上提 vs 上提不留、根分裂长高，一帧一帧放慢看。</div>
+        <div class="desc">阶 4 的 B+ 树插入 + 查找动画：插入 / 查找 / 范围查（20~45）/ 随机 / 自动连插 12 个 / 撤销 / 重置。右侧实时显示比较次数、页读取次数、树高；分裂、复制上提 vs 上提不留、根分裂长高，一帧一帧放慢看。查找那一段会告诉你：命中和未命中付一样贵（都等于树高），范围查是"下降几页 + 顺链表横走几页"。</div>
         <div class="tags"><span class="tag tool">交互动画</span><span class="tag">双击即开</span></div>
       </a>
       <a class="card" href="bufferpool_animator.html">
         <div class="no">TOOL · 命中率模拟器</div>
         <div class="title"><code>bufferpool_animator.html</code></div>
-        <div class="desc">8 帧池 + 20 页磁盘：手动访问 / 自动序列 / 制造缓存污染。LRU 与 Clock 双算法 tab 切换，命中率并排对比；脏页被踢前"帧 ──写回──▶ 磁盘"的箭头，就是写放大的第一课。</div>
+        <div class="desc">8 帧池 + 20 页磁盘：手动访问 / 自动序列 / 制造缓存污染 / 三种策略跑同一条扫描。LRU、Clock（二次机会）、中点插入 三个 tab，命中率三格并排。实测同一条序列 40.0% = 40.0% ＜ 50.0%：Clock 省的是链表 latch，防不住扫描污染；真正保住热页的是 InnoDB 的中点插入。脏页被踢前"帧 ──写回──▶ 磁盘"的箭头，就是写放大的第一课。</div>
         <div class="tags"><span class="tag tool">交互动画</span><span class="tag">双击即开</span></div>
       </a>
     </div>
@@ -299,7 +299,7 @@
       <li><b>跑 <code>01_disk_and_page.cpp</code></b>——先造页，再造 Pager，最后造 Buffer Pool。看命中率怎么爬上去、脏页怎么写回。</li>
       <li><b>边玩 <code>btree_animator.html</code> 边读 <code>02_btree_vs_sorted_array.cpp</code></b>——动画里看清分裂规则（叶子复制上提、内部上提不留），再去 02 看阶 101 的真树怎么长成 4 层。</li>
       <li><b>跑 <code>03_index_in_practice.sql</code></b>——每条 EXPLAIN 先猜再看注释；把"SCAN 还是 SEARCH"练成本能。</li>
-      <li><b>玩 <code>bufferpool_animator.html</code></b>——同一条序列 LRU、Clock 各跑一遍，比较命中率；点「制造缓存污染」看热页死亡回放。</li>
+      <li><b>玩 <code>bufferpool_animator.html</code></b>——先点「三种策略跑同一条扫描」拿三个分数，再逐个 tab 播动画看过程；「制造缓存污染」是热页死亡回放。玩完回答一个问题：为什么 Clock 的名气比它的效果大？</li>
       <li><b>做 tutorial.md 末尾的三道练习</b>——砍扇出重跑 02、纸上画阶 4 插入、当 EXPLAIN 预言家。做完这一关才算通关。</li>
     </ol>
   </div>
@@ -321,6 +321,12 @@
       01 会在当前目录生成 <code>demo.db</code> 并在演示完自动删除；
       若中途 Ctrl+C 留下残留文件，手动删掉即可。编译出的 .exe 也记得清。
     </div>
+  </div>
+
+  <div style="margin-top:34px;padding-top:14px;border-top:1px solid var(--line);color:var(--ink-dim);font-size:.85rem;text-align:center">
+    第 2 关 · 炼气期 · 存储与索引 ｜ 上一关：<a href="../fundamentals/index.html" style="color:var(--accent)">第 1 关 · 筑基期</a> ｜
+    下一关：<a href="../transactions/index.html" style="color:var(--accent)">第 3 关 · 心法期（事务与 ACID）</a> ｜
+    <a href="../数据库学习路线图.html" style="color:var(--accent)">返回总路线图</a>
   </div>
 
 </div>

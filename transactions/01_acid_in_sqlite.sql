@@ -3,7 +3,7 @@
 --  第 3 关 · 心法期 —— 用 SQL 亲手把 ACID 摸一遍
 --
 --  怎么跑（PowerShell 5）：
---    cd d:\Users\Desktop\database\database-learning-path\transactions
+--    cd database-learning-path/transactions
 --    # A) 内存库，快速过一遍原子性/一致性/保存点
 --    sqlite3 :memory: ".read 01_acid_in_sqlite.sql"
 --
@@ -37,13 +37,14 @@ SELECT * FROM pragma_foreign_keys;   -- 输出 0：外键检查关着
 PRAGMA foreign_keys = ON;
 SELECT * FROM pragma_foreign_keys;   -- 输出 1：开了
 .print '--- PRAGMA foreign_keys=ON 已打开（每个连接都要开，它是连接级设置）---'
-.print '--- C++ 类比：它是 per-thread 的，不是一把全局锁，别以为开一次就完事 ---'
+.print '--- C++ 类比：它是 per-connection 的，不是一把全局开关，每个连接都得单独开 ---'
 .print ''
 
 -- =================================================================--
 --  第 1 步：A —— Atomicity（原子性）
 --  要么全成，要么全废。中途 ROLLBACK，外面看什么都没发生过。
---  底层靠谁干活：undo log（回滚日志），先把旧值记下来，出事倒着放回去。
+--  底层靠谁干活：回滚日志（SQLite 的 rollback journal / WAL 里的回滚信息；
+--  MySQL 对应 undo log），把旧值记下来，出事倒着放回去。
 -- =================================================================--
 .print ''
 .print '============ 第 1 步：原子性 —— BEGIN / ROLLBACK ============'
@@ -132,10 +133,10 @@ PRAGMA journal_mode;                 -- 再看一眼，文件库里这里应该�
 PRAGMA synchronous;                  -- 1 = NORMAL
 
 .print '--- 三档 synchronous 的取舍（这是"性能 vs 掉电丢多少"的旋钮）：'
-.print '    OFF(0)    ：不等 fsync，最快，掉电可能丢最近若干事务'
-.print '    NORMAL(1) ：WAL 模式只在 checkpoint 时 fsync，掉电最多丢 checkpoint 未落的那部分'
-.print '              —— 但已 COMMIT 且已写进 -wal 的事务不会丢'
-.print '    FULL(2)   ：每次 COMMIT 都 fsync，最慢最安全'
+.print '    OFF(0)    ：不等 fsync，最快，掉电可能丢最近若干事务，甚至可能损坏（WAL 下风险较小）'
+.print '    NORMAL(1) ：WAL 模式下 COMMIT 不逐个 fsync；掉电/系统崩溃可能丢掉最近已提交的事务，'
+.print '              但不损坏数据库（进程崩溃不等于断电：数据还在 OS 缓存里，通常能保住）'
+.print '    FULL(2)   ：每次 COMMIT 都 fsync，最慢，保证已提交事务在断电后仍在'
 .print '    C++ 类比：synchronous 就是你给 fstream 手动 flush + FlushFileBuffers 的频率。'
 .print '    数据库的持久性承诺从来不是"零丢失"，而是"在某个明确定义的失败模型下不丢"。---'
 
@@ -209,9 +210,9 @@ SELECT (SELECT SUM(balance) FROM account) AS 账户总余额,
 .print '会话 1> BEGIN; '
 .print '会话 1> UPDATE account SET balance = balance - 1 WHERE id = 1;     -- 拿到写锁，未提交'
 .print '会话 2> SELECT balance FROM account WHERE id = 1;                  -- 读'
-.print '会话 2< 1250        ← 读到的是"事务开始前"的旧值，没被阻塞！'
+.print '会话 2< 900         ← 读到的是"事务开始前"的旧值（当前余额 900，事务里已减 1），没被阻塞！'
 .print '结论：WAL 模式读不阻塞写、写不阻塞读。读者读的是快照（旧版本），'
-.print '      这就是 MVCC 的雏形——SQLite 用"多版本 + WAL"实现了 RC 级别的读。'
+.print '      这是快照读的直观效果——SQLite 在 WAL 下让读事务看到一个稳定的旧版本。'
 .print ''
 .print '################ 实测 B：两个写者，后到者立刻拿 SQLITE_BUSY ################'
 .print '会话 1> BEGIN IMMEDIATE;                     -- 开局就抢写锁'
@@ -223,11 +224,11 @@ SELECT (SELECT SUM(balance) FROM account) AS 账户总余额,
 .print '      所以 SQLite 的并发模型是"多读单写"，别拿它扛高并发写。'
 .print ''
 .print '################ 实测 C：DEFERRED 事务的"升级死锁" ################'
-.print '会话 1> BEGIN; UPDATE account SET balance = balance - 1 WHERE id = 1;  -- 读到共享锁，写时才升级'
-.print '会话 2> BEGIN; UPDATE account SET balance = balance + 1 WHERE id = 2;  -- 也先读，也想升级'
+.print '会话 1> BEGIN; UPDATE account SET balance = balance - 1 WHERE id = 1;  -- BEGIN 不拿锁；UPDATE 先读快照再申请写锁'
+.print '会话 2> BEGIN; UPDATE account SET balance = balance + 1 WHERE id = 2;  -- 同样先读后申请写锁'
 .print '会话 2< Error: database is locked'
 .print '结论：默认 BEGIN 等价 BEGIN DEFERRED，锁在第一条语句才要，'
-.print '      两个事务都想"读后升级成写"就会互卡（SQLITE_BUSY_SNAPSHOT）。'
+.print '      两个事务都"先读后写"时，后申请写锁的一方会失败（WAL 下可能是 SQLITE_BUSY_SNAPSHOT）。'
 .print '      工程解法：明知要写的事务，一开始就 BEGIN IMMEDIATE。'
 .print '      C++ 类比：这就是"先拿 shared_lock 读，发现要写再换 unique_lock"，'
 .print '      两个人同时想升级 —— 经典的升级死锁，解法也一样：一开始就 unique_lock。'
@@ -240,12 +241,13 @@ SELECT (SELECT SUM(balance) FROM account) AS 账户总余额,
 .print '      02_transaction_raii.cpp 里我们两种都手搓一遍。'
 .print ''
 .print '################ 实测 E：默认隔离级别是什么 ################'
-.print 'SQLite 只提供 SERIALIZABLE，但 WAL 下的读用的是快照，'
-.print '      实际观感接近 READ COMMITTED（读已提交，不会脏读，也不会重复读报警——'
-.print '      因为在单个 deferred 事务里，快照在第一条读语句时建立，'
-.print '      这更接近 REPEATABLE READ）。'
-.print 'MySQL 默认 REPEATABLE READ（间隙锁防幻读）；PostgreSQL 默认 READ COMMITTED。'
-.print '      面试最爱问的就是这三个默认值的差异。'
+.print 'SQLite 默认提供 SERIALIZABLE 事务。WAL 下读事务在第一条读语句时建立快照，'
+.print '      并保持到事务结束，所以同一事务里重复读结果一致（不会不可重复读）——'
+.print '      这一点更像快照隔离 / REPEATABLE READ。但 SQLite 只有一个写者，'
+.print '      写事务之间串行执行，整体仍满足可串行化。'
+.print 'MySQL InnoDB 默认 REPEATABLE READ（当前读用 Next-Key Lock / 间隙锁防幻读）；'
+.print 'PostgreSQL 默认 READ COMMITTED。'
+.print '      面试最爱问的就是这几个默认值的差异。'
 
 -- =================================================================--
 --  收尾：把库恢复干净，方便你反复跑
@@ -261,7 +263,7 @@ DROP TABLE IF EXISTS account;
 .print ''
 .print '================= 老师傅的话 ================='
 .print ' 1. ACID 不是一个东西，是四个不同部门签的字：'
-.print '      A 由 undo log 签字，I 由 锁/MVCC 签字，'
+.print '      A 由回滚日志 / undo 签字，I 由 锁/MVCC 签字，'
 .print '      D 由 redo/WAL + fsync 签字，C 由你和约束共同签字。'
 .print ' 2. 事务不是"更粗的锁"。BEGIN...COMMIT 给你的第一件事是'
 .print '    "可撤销"，第二件事才是"别人看不见"。'

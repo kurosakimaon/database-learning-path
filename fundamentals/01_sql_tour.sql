@@ -39,7 +39,7 @@ DROP TABLE IF EXISTS readers;
 
 -- 读者表
 CREATE TABLE readers (
-    reader_id INTEGER PRIMARY KEY,          -- INTEGER PRIMARY KEY ≈ 自增主键（本质是 rowid 的别名）
+    reader_id INTEGER PRIMARY KEY,          -- INTEGER PRIMARY KEY = rowid 别名，插入时自动分配（不是 AUTOINCREMENT）
     name      TEXT     NOT NULL,
     age       INTEGER  CHECK (age BETWEEN 6 AND 120),  -- CHECK：写入前断言，类似 assert
     city      TEXT     NOT NULL DEFAULT '未知',
@@ -67,6 +67,8 @@ CREATE TABLE loans (
 
 -- 要点：
 -- 1. INTEGER PRIMARY KEY 在 SQLite 里很特殊：它就是 rowid，插入时自动分配、天然有序。
+--    注意它不等于 AUTOINCREMENT：删除最后一行后，新行可能复用这个 id；
+--    要"永不复用、严格递增"才需要显式写 AUTOINCREMENT（有额外开销）。
 -- 2. REFERENCES ... 是"列级外键"写法，声明"这一列的值必须在另一张表里存在"。
 -- 3. CHECK 约束是数据库层的 assert，比"全靠程序自觉"可靠得多。
 

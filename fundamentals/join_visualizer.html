@@ -179,7 +179,7 @@
     <p>
       左边是员工表，右边是部门表，连接条件是 <code style="font-family:var(--mono)">employee.dept_id = department.dept_id</code>。
       数据里埋了两个"钩子"：钱进没有部门（dept_id 为 NULL），公关部一个员工都没有——
-      INNER / LEFT / RIGHT / FULL 的区别，全在这两处体现。
+      INNER / LEFT / RIGHT / FULL 的区别，全在这两处体现；CROSS 是另一件事——它连 ON 都不看，直接上全组合。
     </p>
     <p class="links">
       <a href="index.html">← 返回模块导航</a>
@@ -224,15 +224,24 @@
 
   <div class="explain" id="explain"><span class="lead">老师傅先说一句：</span>
     JOIN 的本质就是<b>两层 for 循环 + 一个 if</b>：拿左表每一行，去右表逐行比 ON 条件，
-    比上了就把两行拼成一行。五种 JOIN 的差别只有一件事——<b>比不上的行，扔还是留</b>。
+    比上了就把两行拼成一行。INNER / LEFT / RIGHT / FULL 的差别只有一件事——<b>比不上的行，扔还是留</b>；
+    CROSS 压根没有 ON，不比价，另说。
     点模式按钮，再点「下一步」，一行一行看。
   </div>
 
   <footer>
-    好消息：SQLite 从 <b>3.39</b>（2022 年）开始终于支持 <code>RIGHT JOIN</code> 和 <code>FULL OUTER JOIN</code> 了，
-    你机器上是 3.51，五种模式全能真跑。在老的 3.38 及更早版本里 RIGHT / FULL 是不认的，
-    老代码里那些 <code>LEFT JOIN ... UNION ... LEFT JOIN</code> 手拼的写法就是这么来的——见到别慌，知道它在补什么。
-    五种 JOIN 的概念在任何数据库都得懂：MySQL / PostgreSQL / SQL Server 全都有，而且面试必问。
+    好消息：SQLite 从 <b>3.39</b>（2022 年 7 月）开始终于支持 <code>RIGHT JOIN</code> 和 <code>FULL OUTER JOIN</code> 了，
+    本仓库在 <b>3.51</b> 上验证过，五种模式全能真跑。先确认自己手上的版本：
+    <code>SELECT sqlite_version();</code>（sqlite3 命令行里 <code>.version</code> 也一样）。
+    3.38 及更早版本里 RIGHT / FULL 会直接报 <code>RIGHT and FULL OUTER JOINs are not currently supported</code>，
+    老代码里那些 <code>LEFT JOIN ... UNION ALL ... LEFT JOIN</code> 手拼的写法就是这么来的——见到别慌，知道它在补什么。
+    <br><br>
+    <b>别把「五种 JOIN 各家都有」当成常识</b>：INNER / LEFT / CROSS 确实家家都有，RIGHT 也基本家家都有，
+    但 <b>MySQL（含 8.x）到今天都不支持 <code>FULL OUTER JOIN</code></b>，PostgreSQL / SQL Server / Oracle / SQLite 3.39+ 才有。
+    MySQL 里的标准替身是两边各来一次 LEFT 再拼：<br>
+    <code>SELECT ... FROM a LEFT JOIN b ON b.id = a.id<br>UNION ALL<br>SELECT ... FROM b LEFT JOIN a ON a.id = b.id WHERE a.id IS NULL;</code><br>
+    注意中间是 <code>UNION ALL</code> 不是 <code>UNION</code>：左半边的「两边都配上」的行和右半边的「只有右表有」的行本来就不重叠，
+    用 <code>UNION</code> 只是白白多一次去重排序。<b>跨库写查询时，FULL 是唯一要提前问一句「你家数据库支持吗」的模式</b>，面试也爱拿这条挖人。
   </footer>
 </div>
 
@@ -321,7 +330,9 @@ function buildSteps(mode) {
         } else {
           out.push([i, null]);
           text = "拿左表的 <code>" + empName(i) + "</code> 去右表比了一圈，<b>没匹配上</b>。" + why +
-                 " <code>LEFT JOIN</code> 的规则是<b>左表一行都不能少</b>：保留这一行，" +
+                 " <code>" + MODE_NAMES[mode].label + "</code>" +
+                 (mode === "full" ? "（第一遍走的就是 LEFT 的规矩）" : "") +
+                 " 的规则是<b>左表一行都不能少</b>：保留这一行，" +
                  "右表的所有列用 <code>NULL</code> 补上。找「没配对的东西」（没归还的借阅、没部门的员工）就靠它。";
         }
         steps.push({ side: "L", li: i, ri: [], hit: false, rows: out, text: text });
@@ -337,7 +348,7 @@ function buildSteps(mode) {
         steps.push({
           side: "R", li: null, ri: [j], hit: false, rows: [[null, j]],
           text: "左表扫完了。<code>FULL OUTER JOIN</code> 还有第二遍：右表里从没匹配过的行也要留。" +
-                "<code>" + deptName(j) + "</code>" + (DEPTS[j].dept_id === 40 ? "（公关部）" : "") +
+                "<code>" + deptName(j) + "</code>（dept_id=" + DEPTS[j].dept_id + "）" +
                 " 底下<b>一个员工都没有</b>，于是保留它，左表所有列用 <code>NULL</code> 补上。" +
                 "这就是 FULL = LEFT + RIGHT 的并集：两边都一行不丢。"
         });
@@ -369,13 +380,16 @@ function buildSteps(mode) {
   }
 
   if (mode === "cross") {
+    var allR = [];
+    for (j = 0; j < DEPTS.length; j++) allR.push(j);
     for (i = 0; i < EMPS.length; i++) {
       var out3 = [];
       for (j = 0; j < DEPTS.length; j++) out3.push([i, j]);
       steps.push({
-        side: "L", li: i, ri: [0, 1, 2, 3], hit: true, rows: out3,
+        side: "L", li: i, ri: allR.slice(), hit: true, rows: out3,
         text: "<code>CROSS JOIN</code>（笛卡尔积）：<b>不比条件</b>，左表这一行直接跟右表<b>每一行</b>都配对——" +
-              "<code>" + empName(i) + "</code> × 4 个部门 = 新增 4 行。全部做完是 8 × 4 = <b>32</b> 行。" +
+              "<code>" + empName(i) + "</code> × " + DEPTS.length + " 个部门 = 新增 " + DEPTS.length + " 行。" +
+              "全部做完是 " + EMPS.length + " × " + DEPTS.length + " = <b>" + (EMPS.length * DEPTS.length) + "</b> 行。" +
               "这东西平时是事故（忘写 ON 就会得到它），偶尔有用：生成排班表、日历表、全组合测试数据。"
       });
     }
@@ -388,16 +402,16 @@ function buildSteps(mode) {
    渲染
    ===================================================================== */
 var MODE_NAMES = {
-  inner: { sql: "FROM employee e INNER JOIN department d ON d.dept_id = e.dept_id",
+  inner: { label: "INNER JOIN", sql: "FROM employee e INNER JOIN department d ON d.dept_id = e.dept_id",
            rule: "只保留两边都能配上的行。配不上的，两边都扔。" },
-  left:  { sql: "FROM employee e LEFT JOIN department d ON d.dept_id = e.dept_id",
+  left:  { label: "LEFT JOIN", sql: "FROM employee e LEFT JOIN department d ON d.dept_id = e.dept_id",
            rule: "左表一行不丢；配不上的，右表列补 NULL。" },
-  right: { sql: "FROM employee e RIGHT JOIN department d ON d.dept_id = e.dept_id",
+  right: { label: "RIGHT JOIN", sql: "FROM employee e RIGHT JOIN department d ON d.dept_id = e.dept_id",
            rule: "右表一行不丢；配不上的，左表列补 NULL。SQLite 3.39 起才支持，老版本要手拼。" },
-  full:  { sql: "FROM employee e FULL OUTER JOIN department d ON d.dept_id = e.dept_id",
-           rule: "两边都一行不丢（= LEFT ∪ RIGHT）。同样是 SQLite 3.39 起才支持。" },
-  cross: { sql: "FROM employee e CROSS JOIN department d",
-           rule: "不比条件，全组合：行数 = 8 × 4 = 32。忘写 ON 时的默认行为就是它。" }
+  full:  { label: "FULL OUTER JOIN", sql: "FROM employee e FULL OUTER JOIN department d ON d.dept_id = e.dept_id",
+           rule: "两边都一行不丢（= LEFT ∪ RIGHT）。同样是 SQLite 3.39 起才支持；MySQL 至今没有它，要自己 UNION 出来。" },
+  cross: { label: "CROSS JOIN", sql: "FROM employee e CROSS JOIN department d",
+           rule: "不比条件，全组合：行数 = 8 × 4 = 32。MySQL / SQLite / PostgreSQL 里 INNER JOIN 忘写 ON 就退化成它（静悄悄把笛卡尔积跑完）；SQL Server、Oracle 直接报错。NATURAL JOIN 和 USING 也不是它。" }
 };
 
 var mode = "inner";
@@ -454,8 +468,8 @@ function drawWires() {
         /* 未命中：从左行引一条虚线到中间断头 */
         var e1 = $("e" + st.li).getBoundingClientRect();
         var x1 = e1.right - sr.left + 2, y1 = e1.top + e1.height / 2 - sr.top;
-        out += '<path class="' + (isCur ? "wire cur-miss" : "wire cur-miss") +
-               '" d="M ' + x1 + " " + y1 + " l 90 0\"/>" +
+        out += '<path class="wire cur-miss"' +
+               ' d="M ' + x1 + " " + y1 + " l 90 0\"/>" +
                '<text x="' + (x1 + 96) + '" y="' + (y1 + 4) +
                '" fill="#f87171" font-size="11" font-family="Consolas,monospace">✗ 无匹配</text>';
       }
@@ -512,7 +526,7 @@ function renderRows() {
         nameTd.appendChild(b);
       }
     } else if (tr.id) {
-      tr.className = (step > 0) ? "" : "";
+      tr.className = "";
       var old2 = tr.cells[0].querySelector(".badge");
       if (old2) tr.cells[0].removeChild(old2);
     }
@@ -533,7 +547,8 @@ function renderResult() {
   }
   var html = '<table><tr><th>e.emp_name</th><th>e.dept_id</th><th>d.dept_name</th><th>d.floor_no</th></tr>';
   if (rows.length === 0)
-    html += '<tr><td colspan="4" class="empty">到目前为止 INNER JOIN 一行都还没产出……别急，往下看。</td></tr>';
+    html += '<tr><td colspan="4" class="empty">到目前为止 ' + MODE_NAMES[mode].label +
+            ' 一行都还没产出……别急，往下看。</td></tr>';
   for (var i = 0; i < rows.length; i++)
     html += outRow(rows[i][0], rows[i][1]).replace("<tr>", "<tr" + (i >= freshStart ? ' class="fresh"' : "") + ">");
   html += "</table>";

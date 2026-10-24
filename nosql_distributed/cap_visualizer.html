@@ -120,11 +120,13 @@
     <div id="log"></div>
     <div class="foot">
       <b>向量时钟三条家规</b>：<br>
-      ① 每个副本只给自己的计数器 +1，本地写一次涨一格；<br>
+      ① 每个副本只给自己的计数器 +1，本地写一次涨一格（CP 不走这条路：它把「各自的时钟」换成 <b>leader 的单点序号</b>，① 在这里不再适用，所以它也不需要合并）；<br>
       ② 同步时带上自己的时钟；并发就逐分量取 max 当新时钟；<br>
-      ③ 若 a ≥ b（每个分量都 ≥、至少一个 >）⇒ a 发生在 b 之后 ⇒ 旧值被拦截、新值直接覆盖；<br>
+      ③ 若 a ≥ b（每个分量都 ≥、至少一个 >）⇒ a 包含 b 的全部因果历史 ⇒ 旧值被拦截、新值直接覆盖；<br>
       互相谁也不压住谁 ⇒ 并发写 ⇒ 兄弟版本并存，等一个合并函数收场。<br>
-      <b>真实世界里的选型</b>：etcd / ZooKeeper / MySQL 半同步主从走 CP（分区拒写）；Dynamo / Cassandra 走 AP（先写后对账）。
+      <b>两个必须知道的边界</b>：时钟相等但值不同 ⇒ 两边各自合并过同一批兄弟版本，向量时钟到这里就分不出先后（要靠版本向量/因果上下文）；节点换人、一个进程接管别人的计数器 ⇒ ① 被破坏，比较结论不再有任何因果意义。兄弟版本还会无限堆积，所以真实系统都要配一个上限 + 合并策略。<br>
+      <b>真实世界里的选型</b>：etcd / ZooKeeper / Raft·Paxos 类（要多数派才能提交）走 CP，少数派直接拒写；Dynamo / Cassandra 走 AP（先写后对账）。<br>
+      常被误列成 CP 的 <b>MySQL 半同步主从</b>：它只保证「至少一个备库收到日志」，超时会自动退回异步复制，选主/防脑裂仍要靠多数派（组复制、orchestrator + fencing）——严格说它不是 CAP 意义上的 CP。
     </div>
   </div>
 </div>
@@ -164,6 +166,20 @@ function dominates(a, b) {           // a 严格压住 b：a 的因果链包含 
 function maxVc(a, b) {
   return { A: Math.max(a.A, b.A), B: Math.max(a.B, b.B), C: Math.max(a.C, b.C) };
 }
+/* 兄弟版本去重 + 定序。真实系统不保证 siblings 的返回顺序，但演示里必须做到
+   「集合相同 ⇒ 显示相同」：readAll 是拿三个副本的字符串对比的，纯顺序差异会
+   骗出一句「副本不一致」的假报警。 */
+function uniqSorted(a) {
+  var u = [];
+  a.forEach(function (v) { if (u.indexOf(v) < 0) u.push(v); });
+  return u.sort();
+}
+function sameSet(a, b) { return uniqSorted(a).join('|') === uniqSorted(b).join('|'); }
+/* dirty 的真实含义就是「这本账上并存着多个兄弟版本」，从值集合推导，
+   别让某条路径漏设标志位把冲突悄悄藏起来（合并按钮就会一直灰着）。 */
+function syncDirty() {
+  NODES.forEach(function (k) { S.n[k].dirty = S.n[k].vals.length > 1; });
+}
 function fmtVc(v) { return '{A:' + v.A + ' · B:' + v.B + ' · C:' + v.C + '}'; }
 function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 function $(id) { return document.getElementById(id); }
@@ -185,21 +201,35 @@ function explain(html) { $('explain').innerHTML = html; }
    互相压不住 → 并发写，兄弟版本并存，节点亮黄灯等合并。      */
 function applyTo(k, incoming) {
   var n = S.n[k];
-  if (dominates(incoming.vc, n.vc)) { n.vc = clone(incoming.vc); n.vals = incoming.vals.slice(); n.dirty = false; return 'adopt'; }
+  if (dominates(incoming.vc, n.vc)) { n.vc = clone(incoming.vc); n.vals = uniqSorted(incoming.vals); n.dirty = false; return 'adopt'; }
   if (dominates(n.vc, incoming.vc)) { return 'stale'; }
-  if (eqVc(n.vc, incoming.vc)) { return 'same'; }
-  incoming.vals.forEach(function (v) { if (n.vals.indexOf(v) < 0) n.vals.push(v); });
+  if (eqVc(n.vc, incoming.vc)) {
+    // 时钟一模一样：值也一模一样才是"已同步"；否则是两边各自合并出来的同代兄弟版本，照样得并
+    if (sameSet(n.vals, incoming.vals)) return 'same';
+    n.vals = uniqSorted(n.vals.concat(incoming.vals)); n.dirty = true; return 'conflict';
+  }
+  n.vals = uniqSorted(n.vals.concat(incoming.vals));
   n.vc = maxVc(n.vc, incoming.vc);
   n.dirty = true;
   return 'conflict';
 }
 
 /* ---------- 写路径 ---------- */
+/* 只取值、不清框：CP 少数派会拒写，输入框要在「确认收下」之后才清空，
+   否则客户被拒了还得重新打一遍。清框的动作在 doWrite 成功分支末尾。 */
 function nextVal(client) {
   var v = $('val').value.trim();
-  if (v) { $('val').value = ''; return v; }
+  if (v) return v;
   S.seq++;
   return (client === '王' ? 'draft-A' : 'draft-B') + S.seq;
+}
+/* 写入前先看这本账上有没有还没合并的兄弟版本：新写的时钟一定「压住」只有
+   自己那一格在动的本地账 ⇒ adopt ⇒ 兄弟版本被整体覆盖。这是 AP/CP 都躲不掉
+   的坑，演示里必须把它说出来，而不是假装什么都没发生。 */
+function pendingSiblings(keys) {
+  var hit = [];
+  keys.forEach(function (k) { if (S.n[k].vals.length > 1) hit.push(k + '[' + S.n[k].vals.join(', ') + ']'); });
+  return hit;
 }
 function doWrite(client, nodeKey) {
   var value = nextVal(client);
@@ -216,45 +246,71 @@ function doWrite(client, nodeKey) {
     if (S.part) {
       var inc = { vc: clone(S.n.B.vc), vals: [value] };
       inc.vc.B++;
+      var eat1 = pendingSiblings(['B', 'C']);
       applyTo('B', { vc: clone(inc.vc), vals: [value] });
       applyTo('C', { vc: clone(inc.vc), vals: [value] });
       log('ok', '✅ ' + client + ' → B 写 X="' + value + '" ⇒ leader B + 多数派(B,C) 提交 ⇒ B、C 已同步');
+      if (eat1.length) log('warn', '　　⚠️ 这次提交顺手覆盖了多数派侧尚未合并的兄弟版本：' + eat1.join(' / ') +
+        ' —— 带着未解决的冲突继续写，无论 CP 还是 AP 都会丢数据。');
       log('dim', '　　分区对面的 A 收不到，还停在 "' + S.n.A.vals.join(' / ') + '" @ ' + fmtVc(S.n.A.vc) + ' —— 恢复后要么被覆盖、要么撞成冲突，看时钟');
       explain('多数派侧照常写，这本身就是 CP 的代价分配：<b>能凑齐多数派的一侧继续服务，凑不齐的那侧直接拒写</b>。客户端老王此刻只能吃错误。');
     } else {
       var inc2 = { vc: clone(S.n.B.vc), vals: [value] };
       inc2.vc.B++;
+      var eat2 = pendingSiblings(NODES);
       NODES.forEach(function (k) { applyTo(k, { vc: clone(inc2.vc), vals: [value] }); });
       log('ok', '✅ ' + client + ' → ' + nodeKey + ' 写 X="' + value + '" ⇒ 转给 leader B ⇒ 多数派提交 ⇒ 三节点同步应用 @ ' + fmtVc(inc2.vc));
+      if (eat2.length) log('warn', '　　⚠️ 多数派提交把这几本账上未合并的兄弟版本一并盖掉了：' + eat2.join(' / ') +
+        '（CP 假设「提交即唯一真相」，所以它不会像 AP 那样把冲突摆着等你合并 —— 切模式前先把冲突清干净）。');
       explain('无分区时 CP 也照常工作：从哪个节点进都要<b>转发给 leader、凑齐多数派日志确认</b>才返回成功 —— 比直写本地慢一个来回，换的是「返回成功 = 全账本一致」。');
     }
   } else {
     var inc3 = { vc: clone(S.n[nodeKey].vc), vals: [value] };
     inc3.vc[nodeKey]++;
+    var hadSiblings = S.n[nodeKey].vals.length > 1 ? S.n[nodeKey].vals.slice() : null;
     applyTo(nodeKey, inc3);
     log('ok', '✅ ' + client + ' → ' + nodeKey + ' 写 X="' + value + '" ⇒ AP 选了可用性：本地落盘立刻返回 @ ' + fmtVc(inc3.vc));
+    if (hadSiblings) {
+      log('warn', '　　⚠️ 但 ' + nodeKey + ' 上原本挂着 ' + hadSiblings.length + ' 个未合并的兄弟版本 [' +
+        hadSiblings.join(', ') + ']，这次裸写把它们从这本账上抹掉了（新写时钟逐分量 ≥ 本地 ⇒ adopt ⇒ 旧值被拦截）。');
+      log('warn', '　　AP 的暗坑就在这儿：Dynamo 系要求客户端把读到的版本/上下文一起带回来（条件写），' +
+        '不带上下文的裸 put 就是这种悄悄丢数据。');
+    }
     var peers = NODES.filter(function (k) { return k !== nodeKey && side(k) === side(nodeKey); });
     peers.forEach(function (k) {
       applyTo(k, { vc: clone(inc3.vc), vals: [value] });
       log('dim', '　　异步复制 ' + nodeKey + ' → ' + k + '（同侧可达，送达）');
     });
     if (S.part) log('warn', '　　分区对面的节点送不到，复制欠账记在墙上 —— 这就是「最终一致」里那句「最终」的代价');
-    explain('AP 的账是这么算的：<b>先答应客户，账本分叉回头再对</b>。分区期间两边各写各的，向量时钟会诚实地把这段并发历史记下来。');
+    explain(hadSiblings
+      ? '注意这次写入：<b>未合并的兄弟版本被一次裸写覆盖掉了</b>。AP 把冲突推迟到「事后合并」，可在合并发生之前，任何一次不带上下文的可写副本上的 put 就能吃掉别人的账 —— 所以真实系统要么强制条件写（把读到的版本一并带回），要么在 put 前先 read-repair。'
+      : 'AP 的账是这么算的：<b>先答应客户，账本分叉回头再对</b>。分区期间两边各写各的，向量时钟会诚实地把这段并发历史记下来。');
   }
+  $('val').value = '';   // 走到这里说明写入已被接受，才清输入框
   afterOp();
 }
 
 /* ---------- 读路径 ---------- */
+/* 本演示的读一律「直读本地副本」，是弱读：这样才把分叉画得出来。
+   真实的 CP 读不这么走 —— 要么读 leader，要么 leader 租约/多数派确认，
+   少数派侧的那次读根本不会返回一个旧值，而是超时或转发错误。 */
 function readAll() {
   var outs = NODES.map(function (k) { return S.n[k].vals.join(' / '); });
+  log('dim', '　　（本次是直读三个本地副本的弱读：CP 模式下真实系统不会这么读 —— 读要走 leader/租约/多数派确认）');
   NODES.forEach(function (k) {
     var n = S.n[k];
     log('dim', '📖 读 X@' + k + ' ⇒ "' + n.vals.join(' / ') + '" @ ' + fmtVc(n.vc) + (n.dirty ? '  ⚔️冲突待并' : ''));
   });
   if (outs[0] === outs[1] && outs[1] === outs[2]) {
-    log('ok', '　　三副本返回值一致');
+    var anySib = NODES.some(function (k) { return S.n[k].vals.length > 1; });
+    if (anySib) log('warn', '　　三副本返回值「一致」—— 一致的是那一份兄弟版本集合，不是最终答案：' +
+      'X 仍然 ∈ [' + S.n.A.vals.join(', ') + ']，读到的是一个待合并的集合。反熵只能让「分叉的账本」变成「人人都拿着同一叠账」，不能替你选一笔。');
+    else log('ok', '　　三副本返回值一致');
   } else {
     log('warn', '⚠️ 三个副本返回值不同 —— 问到哪个副本看到哪张脸，这就是「弱一致性」现场');
+    if (S.mode === 'CP')
+      log('warn', '　　但 CP 模式下这次读本来不该发生：真实 CP 读要走了解状态的 leader（或租约/多数派确认），' +
+        '少数派侧的 A 只会给你一次超时，而不是把它那个旧值当答案返回。上面那句是「直读本地」这个演示简化换来的。');
   }
   afterOp();
 }
@@ -278,48 +334,64 @@ function togglePart() {
 /* ---------- 反熵同步 ---------- */
 function exchange(x, y, first) {
   var nx = S.n[x], ny = S.n[y];
-  if (S.part && side(x) !== side(y)) { log('warn', '　　' + x + ' ⇢ ' + y + '：超时（跨分区，不可达）'); return; }
+  if (S.part && side(x) !== side(y)) { log('warn', '　　' + x + ' ⇢ ' + y + '：超时（跨分区，不可达）'); return 'timeout'; }
   var vx = clone(nx.vc), vy = clone(ny.vc);
+  var beforeX = clone(nx.vals), beforeY = clone(ny.vals);   // 比较面板要看「合并前各自有什么」，必须在动账之前留底
   if (dominates(vx, vy)) {
-    var oldY = clone(ny.vals);
-    ny.vc = clone(vx); ny.vals = nx.vals.slice(); ny.dirty = false;
+    ny.vc = clone(vx); ny.vals = uniqSorted(beforeX); ny.dirty = false;
     if (first) {
       log('dim', '　　' + x + ' ⇄ ' + y + '：' + fmtVc(vx) + ' 支配 ' + fmtVc(vy) + ' ⇒ ' + y + ' 的旧账本被整体覆盖');
-      LASTSYNC = { x: x, y: y, vx: vx, vy: vy, valsX: clone(nx.vals), valsY: oldY, merged: clone(vx),
+      LASTSYNC = { x: x, y: y, vx: vx, vy: vy, valsX: beforeX, valsY: beforeY, merged: clone(vx), kind: 'cover',
         verdict: fmtVc(vx) + ' 逐分量 ≥ ' + fmtVc(vy) + ' 且至少一格更大 ⇒ ' + x + ' 包含 ' + y + ' 的全部历史 ⇒ ' + y + ' 是旧账，被整体覆盖（03 演示三的旧值拦截，换个马甲又来了）' };
     }
   } else if (dominates(vy, vx)) {
+    nx.vc = clone(vy); nx.vals = uniqSorted(beforeY); nx.dirty = false;
     if (first) {
       log('dim', '　　' + x + ' ⇄ ' + y + '：' + fmtVc(vy) + ' 支配 ' + fmtVc(vx) + ' ⇒ ' + x + ' 拿旧账，被新账本覆盖');
-      LASTSYNC = { x: x, y: y, vx: vx, vy: vy, valsX: clone(nx.vals), valsY: clone(ny.vals), merged: clone(vy),
+      LASTSYNC = { x: x, y: y, vx: vx, vy: vy, valsX: beforeX, valsY: beforeY, merged: clone(vy), kind: 'cover',
         verdict: fmtVc(vy) + ' 逐分量 ≥ ' + fmtVc(vx) + ' 且至少一格更大 ⇒ ' + y + ' 包含 ' + x + ' 的全部历史 ⇒ ' + x + ' 是旧账，被整体覆盖（03 演示三的旧值拦截，换个马甲又来了）' };
     }
-    nx.vc = clone(vy); nx.vals = ny.vals.slice(); nx.dirty = false;
   } else if (eqVc(vx, vy)) {
-    if (first) log('dim', '　　' + x + ' ⇄ ' + y + '：时钟相同 ⇒ 账本已同步');
+    // 时钟一模一样 ⇒ 因果上没有任何一笔是「对方的后来者」，可比的是值集合本身
+    var inSync = sameSet(beforeX, beforeY);
+    var uni0 = uniqSorted(beforeX.concat(beforeY));
+    nx.vals = uni0.slice(); ny.vals = uni0.slice();
+    if (first) {
+      log(inSync ? 'dim' : 'warn', '　　' + x + ' ⇄ ' + y + '：时钟相同 ⇒ ' +
+        (inSync ? '账本已同步' : '值却不同：同一代兄弟版本（谁都不是谁的后来者），先并起来等合并'));
+      LASTSYNC = { x: x, y: y, vx: vx, vy: vy, valsX: beforeX, valsY: beforeY, merged: clone(vx), kind: inSync ? 'same' : 'conflict',
+        verdict: inSync
+          ? '逐分量相等 ⇒ 两边看到的是同一段因果历史，值也一致 ⇒ 什么都不用做'
+          : '⚔️ 时钟相等但值集合不同 ⇒ 这笔并发账没有任何一侧是「后来者」（通常发生在两边各自合并过同一批兄弟版本之后）⇒ 只能并存，等合并函数或人工收场' };
+    }
   } else {
+    // 先留底再合并：兄弟版本两边取同一份定序集合，否则同样的内容会因拼接顺序
+    // 不同而显示成 ['a', 'b'] 和 ['b', 'a']，「三副本是否一致」的判据就被顺序差异骗了。
     var merged = maxVc(vx, vy);
-    ny.vals = ny.vals.concat(nx.vals.filter(function (v) { return ny.vals.indexOf(v) < 0; }));
-    ny.vc = merged; ny.dirty = true;
-    nx.vals = nx.vals.concat(ny.vals.filter(function (v) { return nx.vals.indexOf(v) < 0; }));
-    nx.vc = clone(merged); nx.dirty = true;
+    var uni = uniqSorted(beforeX.concat(beforeY));
+    nx.vals = uni.slice(); nx.vc = clone(merged); nx.dirty = true;
+    ny.vals = uni.slice(); ny.vc = clone(merged); ny.dirty = true;
     if (first) {
       log('warn', '　　' + x + ' ⇄ ' + y + '：' + fmtVc(vx) + ' vs ' + fmtVc(vy) + ' ⇒ 互不支配 ⇒ ⚔️ 并发写，兄弟版本并存');
       LASTSYNC = {
         x: x, y: y, vx: vx, vy: vy,
-        valsX: clone(nx.vals), valsY: clone(ny.vals), merged: merged,
-        verdict: '两本时钟互相都压不住对方（各有对方没有的那一笔）⇒ 这是并发写，不是谁迟到 —— 旧值拦截不适用，只能并存等合并'
+        valsX: beforeX, valsY: beforeY, merged: clone(merged), kind: 'conflict',
+        verdict: '⚔️ 两本时钟互相都压不住对方（各有对方没有的那一笔）⇒ 这是并发写，不是谁迟到 —— 旧值拦截不适用，只能并存等合并'
       };
     }
   }
 }
 function syncAll() {
   log('sys', '🔄 反熵同步开始：A⇄B、A⇄C、B⇄C 两两交换（真实系统里靠 gossip + Merkle 树省流量）');
-  exchange('A', 'B', true);
-  exchange('A', 'C', false);
-  exchange('B', 'C', false);
-  var anyDirty = NODES.some(function (k) { return S.n[k].dirty; });
-  if (anyDirty) {
+  var cross = 0;
+  if (exchange('A', 'B', true) === 'timeout') cross++;
+  if (exchange('A', 'C', false) === 'timeout') cross++;
+  if (exchange('B', 'C', false) === 'timeout') cross++;
+  var anyDirty = NODES.some(function (k) { return S.n[k].vals.length > 1; });
+  if (cross) {
+    log('warn', '⚠️ 对账没跑完：' + cross + ' 对跨分区的会话超时 —— 网络还断着，账本不可能靠对账自己合拢。先点「🔌 恢复网络」再同步。');
+    explain('反熵也是<b>要网络</b>的：分区期间「最终一致」的承诺根本还没开始计时。这一句是给「最终」两个字定价的 —— 收敛时间下限 = 分区持续时间 + 若干轮 gossip。');
+  } else if (anyDirty) {
     log('warn', '⚔️ 对账结束：存在兄弟版本 —— 机器不敢替你决定丢哪笔账，等人工/业务函数合并');
     explain('这就是 03 演示二里「两边各写各的」在恢复后的现场：<b>向量时钟判定为并发</b> ⇒ 谁也不是谁的后来者 ⇒ 值并存（Dynamo 里的 siblings），由合并函数或人工收场。');
   } else {
@@ -340,14 +412,24 @@ function merge() {
   var base = freshVc();
   NODES.forEach(function (k) { base = maxVc(base, S.n[k].vc); });
   var nvc = clone(base); nvc[LEADER]++;
-  NODES.forEach(function (k) { applyTo(k, { vc: clone(nvc), vals: [mergedVal] }); });
+  // 运维台看得到全网的书（这是它的权限），但广播写不进分区对面那侧 —— 硬要塞过去
+  // 就等于宣称「分区不影响写可达」，CP 与 AP 的差别会被这个按钮抹掉。
+  var reach = NODES.filter(function (k) { return !S.part || side(k) === side(LEADER); });
+  var stuck = NODES.filter(function (k) { return reach.indexOf(k) < 0; });
+  reach.forEach(function (k) { applyTo(k, { vc: clone(nvc), vals: [mergedVal] }); });
   LASTSYNC = {
-    x: '合并', y: '全体广播', vx: base, vy: nvc,
-    valsX: uniq, valsY: [mergedVal], merged: nvc,
-    verdict: '合并时钟逐分量取 max 再 +1 ⇒ 严格支配两边所有兄弟版本的时钟 ⇒ 广播出去，全体采纳，siblings 收场'
+    x: '合并', y: reach.join('、') || '（无人可达）', vx: base, vy: nvc,
+    valsX: uniq.slice(), valsY: [mergedVal], merged: nvc, kind: 'merge',
+    verdict: '合并时钟逐分量取 max 再 +1 ⇒ 严格支配两边所有兄弟版本的时钟 ⇒ 广播出去，收到的一方全体采纳，siblings 收场'
   };
-  log('ok', '⚔️→✅ 手动合并：「' + mergedVal + '」以时钟 ' + fmtVc(nvc) + ' 广播 ⇒ 支配双方所有时钟 ⇒ 全体采纳，冲突清除');
-  explain('合并是 <b>AP 路线的后半段</b>：可用性赚到的每一次「两边都写成功」，都会在这里变成一次「谁来当合并函数」。Dynamo 用 last-writer-wins / 因果时钟 / CRDT  counters，业务各选各的。');
+  log('ok', '⚔️→✅ 手动合并：「' + mergedVal + '」以时钟 ' + fmtVc(nvc) + ' 广播 ⇒ 支配双方所有时钟 ⇒ ' +
+    (reach.length ? reach.join('、') + ' 采纳，冲突清除' : '无人可达，先记下来'));
+  if (stuck.length) log('warn', '　　' + stuck.join('、') + ' 此刻在分区对面，收不到这次合并 —— 它的时钟已被合并时钟支配，' +
+    '网络恢复后一次「反熵同步」就会自动追平；在此之前读它仍然会读到旧的兄弟版本。');
+  explain('合并是 <b>AP 路线的后半段</b>：可用性赚到的每一次「两边都写成功」，都会在这里变成一次「谁来当合并函数」。' +
+    '2007 年的 Dynamo 原方案是<b>向量时钟 + siblings + 客户端自定义合并函数</b>（把选哪个值的权力交给业务代码）；' +
+    'last-writer-wins、条件写、计数器（CRDT）这些是后来的 DynamoDB 才端上来的现成选项 —— 别把两代东西记混。' +
+    (stuck.length ? ' 顺带一个容易漏的点：分区期间合并结果只能喂给可达的那侧，孤岛侧要等网络恢复后靠反熵追平 ——「最终一致」的「最终」是按分区时长计价的。' : ''));
   renderClocks();
   afterOp();
 }
@@ -357,7 +439,7 @@ function switchMode(m) {
   if (S.part) log('warn', 'ℹ️ 分区中换模式 = 飞行途中换发动机，仅演示用');
   S.mode = m;
   log('sys', '🛠 模式 → ' + m + '：' + (m === 'CP'
-    ? '分区时少数派拒写（ZooKeeper / etcd / InnoDB 半同步主从的路子）'
+    ? '分区时少数派拒写：提交必须先凑齐多数派（ZooKeeper / etcd 这类 Raft·Paxos 系统的路子）'
     : '分区时两边照写，恢复后对账（Dynamo / Cassandra 的路子）'));
   explain(m === 'CP'
     ? 'CP：<b>一致性 > 可用性</b>。分区是少数事件，宁可让它发生时停一侧，也不让分叉进账本。'
@@ -424,7 +506,7 @@ function renderClocks() {
     return;
   }
   var t = LASTSYNC;
-  var cls = t.verdict.indexOf('⚔') >= 0 ? 'amber' : 'green';
+  var cls = (t.kind === 'conflict') ? 'amber' : 'green';
   $('clocks').innerHTML =
     '<p>' + esc(t.x) + ' ⇄ ' + esc(t.y) + '</p>' +
     '<p class="vc">' + esc(t.x) + '：' + fmtVc(t.vx) + ' ⇒ [' + t.valsX.map(esc).join(', ') + ']</p>' +
@@ -436,10 +518,10 @@ function refresh() {
   $('btnCP').className = (S.mode === 'CP') ? 'on' : '';
   $('btnAP').className = (S.mode === 'AP') ? 'on' : '';
   $('btnPart').textContent = S.part ? '🔌 恢复网络' : '⚡ 切断网络（分区）';
-  var anyDirty = NODES.some(function (k) { return S.n[k].dirty; });
+  var anyDirty = NODES.some(function (k) { return S.n[k].vals.length > 1; });
   $('btnMerge').disabled = !anyDirty;
 }
-function afterOp() { render(); renderClocks(); refresh(); }
+function afterOp() { syncDirty(); render(); renderClocks(); refresh(); }
 
 /* ---------- 启动 ---------- */
 $('btnCP').onclick = function () { switchMode('CP'); };

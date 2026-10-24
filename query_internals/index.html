@@ -235,8 +235,8 @@
         <b>统计过期时（以为只命中 0.1%）</b>
         优化器"正确地"选了计划 C（索引扫+回表）：<br>
         估代价 <span class="big">157.0</span> 全场最低。<br>
-        可真实要回表 49,500 次——真跑起来比 A 慢
-        <span class="big">973</span> 倍。
+        可真实要回表 49,500 次——真跑起来比正确的 A 计划慢
+        <span class="big">142</span> 倍（C 自己估 157、实际 152,710，估错 973 倍）。
       </div>
       <div class="real">
         <b>ANALYZE 之后（知道命中 99%）</b>
@@ -246,7 +246,7 @@
       </div>
     </div>
     <div class="why">
-      <div><b>算法的账先算清</b>01 实测：块嵌 NL 177.91ms，Hash Join 0.94ms——同数据同结果（48,987 行），差 189 倍。差距全在页账上。</div>
+      <div><b>算法的账先算清</b>01 本机实测：块嵌 NL 约 122~133ms，Hash Join 约 0.30ms——同数据同结果（48,987 行），差四百倍。差距全在比较与页账上。</div>
       <div><b>EXPLAIN 是计划的 X 光</b>SCAN 还是 SEARCH、回不回表、要不要临时 B 树——03 用 15 道题、22 条真实输出练成本能。</div>
       <div><b>断电的账最后算</b>04 手写 WAL：提交 = fsync 返回；有 COMMIT 重放、没 COMMIT 丢弃、烂尾截断。恢复三规，一次崩溃全演完。</div>
     </div>
@@ -264,13 +264,13 @@
       <a class="card" href="01_join_algorithms.cpp">
         <div class="no">STEP 01 · 地基</div>
         <div class="title"><code>01_join_algorithms.cpp</code></div>
-        <div class="desc">四种 join 同场竞技：块嵌 NL / Index NL / Sort-Merge / Hash Join，同一份数据（5000×50000，含 2% 悬空外键），比较与页读分栏记账。实测：约 141~178 / 2.8 / 2.4 / 0.7~0.9 毫秒（耗时随负载浮动）——差近 200 倍的真相是页账不是比较账。</div>
+        <div class="desc">四种 join 同场竞技：块嵌 NL / Index NL / Sort-Merge / Hash Join，同一份数据（5000×50000，含 2% 悬空外键），比较与页读分栏记账。本机实测：约 122~133 / 2.2~2.3 / 1.79 / 0.30 毫秒（耗时随负载浮动）——差四百倍的真相是比较账加页账，不是行数。</div>
         <div class="tags"><span class="tag star">★ C++ 单文件</span><span class="tag live">g++ 直接编译</span></div>
       </a>
       <a class="card" href="02_cost_model.cpp">
         <div class="no">STEP 02 · 心脏</div>
         <div class="title"><code>02_cost_model.cpp</code></div>
-        <div class="desc">手写迷你优化器的"会计部分"：代价 = 页×1.0 + 比较×0.005。三轮剧本：过期统计选 C（估 157，真实慢 973 倍）→ 上帝视角看真实账 → ANALYZE 后会计改选 A。这屏数字治百种"计划怎么这么怪"。</div>
+        <div class="desc">手写迷你优化器的"会计部分"：代价 = 页×1.0 + 比较×0.005。三轮剧本：过期统计选 C（估 157，真实代价 152,710，是正确 A 的 142 倍）→ 上帝视角看真实账 → ANALYZE 后会计改选 A。这屏数字治百种"计划怎么这么怪"。</div>
         <div class="tags"><span class="tag star">★ 本关心脏</span><span class="tag live">g++ 直接编译</span></div>
       </a>
       <a class="card" href="03_explain_drills.sql">
@@ -282,7 +282,7 @@
       <a class="card" href="explain_pipeline.html">
         <div class="no">TOOL · 最重要的教具</div>
         <div class="title"><code>explain_pipeline.html</code></div>
-        <div class="desc">一条 SQL 的五道工序动画：字符串 → 语法树 → 约束列表 → 优化器打分（A 1,072.5 vs C 152,710）→ 火山模型 next() 箭头流动（BUILD/PROBE/EOF + 实时计数器）→ 结果。14 步，右侧面板同步显示每道工序的输入输出。</div>
+        <div class="desc">一条 SQL 的六道工序动画：字符串 → 语法树 → 约束列表 → 优化器打分（A 1,072.5 vs C 152,710）→ 火山模型 next() 箭头流动（BUILD/PROBE/EOF + 实时计数器）→ 结果。14 步，右侧面板同步显示每道工序的输入输出。</div>
         <div class="tags"><span class="tag tool">交互动画</span><span class="tag">双击即开</span></div>
       </a>
       <a class="card" href="04_wal_and_crash.cpp">
@@ -300,7 +300,7 @@
       <li><b>通读 <code>tutorial.md</code></b>——先接受"会计不是预言家"这句命题，带着"计划到底是怎么被算出来的"往下看。</li>
       <li><b>跑 <code>01_join_algorithms.cpp</code></b>——四种算法各跑一遍，盯"比较 / 页读"两栏：Hash 赢在哪、Index NL 什么时候翻身（选择性极高时）。</li>
       <li><b>打开 <code>explain_pipeline.html</code> 点自动播放</b>——先看一遍全流程混个眼熟，特别是火山模型里"黄色箭头向下=next() 调用、绿色箭头向上=行数据"这对关系。</li>
-      <li><b>跑 <code>02_cost_model.cpp</code></b>——三轮剧本一跑，"估 157 / 真 15 万 / 差 973 倍"这三个数字就刻脑子里了，动画里的代价表瞬间看懂。</li>
+      <li><b>跑 <code>02_cost_model.cpp</code></b>——三轮剧本一跑，"估 157 / 真 15 万 / 正确计划只要 1,072.5"这几个数字就刻脑子里了，动画里的代价表瞬间看懂。</li>
       <li><b>做 <code>03_explain_drills.sql</code> 15 道题</b>——每条先遮住注释自己猜，再对答案；把"SCAN 还是 SEARCH、回不回表"练成本能。</li>
       <li><b>跑 <code>04_wal_and_crash.cpp</code> 并故意改坏它</b>——做 tutorial 练习3：把 torn_bytes 改小 1 字节，看恢复三规多严格。</li>
       <li><b>做 tutorial.md 末尾的三道练习</b>——解选择率临界点、改 IN 为 EXISTS 看计划、玩崩溃截断。做完这关才算通关。</li>
@@ -310,12 +310,12 @@
   <div class="panel">
     <h2>⌨️ 跑起来的命令（PowerShell）</h2>
     <pre class="cmd">
-<span class="c"># C++ 示例：单文件，无需任何依赖（g++ 15 已验证）</span>
+<span class="c"># C++ 示例：单文件，无需任何第三方依赖（任意 C++17 编译器）</span>
 <span class="k">g++</span> -std=c++17 -O2 01_join_algorithms.cpp -o 01.exe ; .\01.exe
 <span class="k">g++</span> -std=c++17 -O2 02_cost_model.cpp -o 02.exe ; .\02.exe
 <span class="k">g++</span> -std=c++17 -O2 04_wal_and_crash.cpp -o 04.exe ; .\04.exe
 
-<span class="c"># SQL 实验：内存库直接跑，退出码 0 = 零报错（sqlite3 3.51 已验证）</span>
+<span class="c"># SQL 实验：内存库直接跑，退出码 0 = 零报错（SQLite 3.51 参考机已验证）</span>
 <span class="k">sqlite3</span> :memory: ".read 03_explain_drills.sql"
 
 <span class="c"># 动画：文件管理器里双击 .html 即可，零外部依赖、断网可用</span>
@@ -325,6 +325,12 @@
       04 会在当前目录生成 <code>engine.db</code> / <code>engine.wal</code>，演示完自动删除；
       若中途强杀进程留下残留，手动删掉即可。编译出的 .exe 也记得清。
     </div>
+  </div>
+
+  <div style="margin-top:34px;padding-top:14px;border-top:1px solid var(--line);color:var(--ink-dim);font-size:.85rem;text-align:center">
+    第 5 关 · 结丹期 · 查询内幕 ｜ 上一关：<a href="../cpp_integration/index.html" style="color:var(--accent)">第 4 关 · 兵器期（C++ 接入数据库）</a> ｜
+    下一关：<a href="../nosql_distributed/index.html" style="color:var(--accent)">第 6 关 · 轻剑期（NoSQL 与分布式）</a> ｜
+    <a href="../数据库学习路线图.html" style="color:var(--accent)">返回总路线图</a>
   </div>
 
 </div>

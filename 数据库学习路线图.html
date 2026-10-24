@@ -176,7 +176,7 @@
   <div class="meta">
     <div class="meta-item"><strong>7</strong>关卡</div>
     <div class="meta-item"><strong>22</strong>个 C++ 示例（实测编译通过）</div>
-    <div class="meta-item"><strong>9</strong>个交互动画</div>
+    <div class="meta-item"><strong>10</strong>个交互动画</div>
     <div class="meta-item"><strong>1</strong>个迷你数据库</div>
   </div>
 </div>
@@ -263,13 +263,13 @@
   <p>顺序不要乱。每一关都建立在前一关的地基上，跳过会硌牙。</p>
   <table>
     <tr><th>关卡</th><th>目录</th><th>一句话目标</th><th>验收标准</th></tr>
-    <tr><td>🌱 筑基期</td><td><a href="fundamentals/index.html">fundamentals</a></td><td>SQL 写到不用查文档</td><td>沙盒里盲写出 JOIN + 分组 + 排序</td></tr>
-    <tr><td>💎 内功期</td><td><a href="storage_index/index.html">storage_index</a></td><td>看懂数据库的"内存模型"</td><td>说清 B+ 树为什么不是红黑树</td></tr>
-    <tr><td>🔥 心法期</td><td><a href="transactions/index.html">transactions</a></td><td>驾驭并发与崩溃</td><td>能解释 MVCC 下 RR 还幻读吗</td></tr>
-    <tr><td>🔧 兵器期</td><td><a href="cpp_integration/index.html">cpp_integration</a></td><td>把 DB 稳稳接进 C++ 工程</td><td>写出异常安全的 RAII 事务</td></tr>
-    <tr><td>👑 化境期</td><td><a href="query_internals/index.html">query_internals</a></td><td>优化器在想什么</td><td>看 EXPLAIN 就知道慢在哪</td></tr>
-    <tr><td>🗺️ 轻剑期</td><td><a href="nosql_distributed/index.html">nosql_distributed</a></td><td>知道边界，不被选型忽悠</td><td>能讲 LSM 与 B+ 树的取舍</td></tr>
-    <tr><td>🏆 大师期</td><td><a href="minidb/index.html">minidb</a></td><td>自己造一个迷你数据库</td><td>六阶段全绿 + 崩溃恢复成功</td></tr>
+    <tr><td>🌱 第 1 关 · 筑基期</td><td><a href="fundamentals/index.html">fundamentals</a></td><td>SQL 写到不用查文档</td><td>沙盒里盲写出 JOIN + 分组 + 排序</td></tr>
+    <tr><td>💎 第 2 关 · 炼气期</td><td><a href="storage_index/index.html">storage_index</a></td><td>看懂数据库的"内存模型"</td><td>说清 B+ 树为什么不是红黑树</td></tr>
+    <tr><td>🔥 第 3 关 · 心法期</td><td><a href="transactions/index.html">transactions</a></td><td>驾驭并发与崩溃</td><td>能解释 MVCC 下 RR 还幻读吗</td></tr>
+    <tr><td>🔧 第 4 关 · 兵器期</td><td><a href="cpp_integration/index.html">cpp_integration</a></td><td>把 DB 稳稳接进 C++ 工程</td><td>写出异常安全的 RAII 事务</td></tr>
+    <tr><td>👑 第 5 关 · 结丹期</td><td><a href="query_internals/index.html">query_internals</a></td><td>优化器在想什么</td><td>看 EXPLAIN 就知道慢在哪</td></tr>
+    <tr><td>🗺️ 第 6 关 · 轻剑期</td><td><a href="nosql_distributed/index.html">nosql_distributed</a></td><td>知道边界，不被选型忽悠</td><td>能讲 LSM 与 B+ 树的取舍</td></tr>
+    <tr><td>🏆 第 7 关 · 手搓期</td><td><a href="minidb/index.html">minidb</a></td><td>自己造一个迷你数据库</td><td>六阶段全绿 + 崩溃恢复成功</td></tr>
   </table>
 </section>
 
@@ -305,7 +305,7 @@
       <div class="dot">2</div>
       <div class="stage-card">
         <div class="stage-head">
-          <h3>💎 内功期 · 存储引擎与索引</h3>
+          <h3>💎 第 2 关 · 炼气期 · 存储引擎与索引</h3>
           <span class="badge hot">最重要的一关</span>
           <a class="badge" href="storage_index/index.html">进入本关 →</a>
         </div>
@@ -316,8 +316,8 @@
           <li><span class="fn">01_disk_and_page.cpp</span><span class="fd">亲手实现 4KB 定长页 + Pager + LRU Buffer Pool，打印每一次磁盘读写</span></li>
           <li><span class="fn">02_btree_vs_sorted_array.cpp</span><span class="fd">100 万 key 四方案对决：线性 / 二分 / B+ 树 / 红黑树，分开算 CPU 账和 I/O 账</span></li>
           <li><span class="fn">03_index_in_practice.sql</span><span class="fd">20 万行实测：覆盖索引避免回表、最左前缀、索引失效的 5 种写法</span></li>
-          <li><span class="fn">btree_animator.html</span><span class="fd"><span class="anim-flag">【动画】</span>阶 4 B+ 树插入 → 满 → 分裂 → 上提 → 长高，计数器实时跳动</span></li>
-          <li><span class="fn">bufferpool_animator.html</span><span class="fd"><span class="anim-flag">【动画】</span>LRU vs Clock 命中率对比，一键"制造缓存污染"</span></li>
+          <li><span class="fn">btree_animator.html</span><span class="fd"><span class="anim-flag">【动画】</span>阶 4 B+ 树插入 → 满 → 分裂 → 上提 → 长高，另有「查找 / 范围查」演示读页 = 树高 + 链表横走，计数器实时跳动</span></li>
+          <li><span class="fn">bufferpool_animator.html</span><span class="fd"><span class="anim-flag">【动画】</span>LRU vs Clock vs InnoDB 中点插入 三算法命中率对照，一键"制造缓存污染"、一键三连跑同一条扫描</span></li>
         </ul>
         <div class="note">
           实测结论：<b>比较次数会骗人，页读取次数才是分水岭</b>——100 万 key 时二分要 20 次随机 I/O，B+ 树只要 <b>4 次（树高）</b>；
@@ -345,7 +345,7 @@
           <li><span class="fn">04_lock_and_deadlock.cpp</span><span class="fd">手搓行锁管理器：共享/排他、等待队列、超时、等待图找环破死锁</span></li>
           <li><span class="fn">acid_cheatsheet.md</span><span class="fd">一页速查：ACID 各靠哪个机制、隔离级别对照、死锁排查套路</span></li>
           <li><span class="fn">mvcc_animator.html</span><span class="fd"><span class="anim-flag">【动画】</span>版本链 + read view，切 RC/RR 看快照时机差别与"命中哪个版本"</span></li>
-          <li><span class="fn">isolation_playground.html</span><span class="fd"><span class="anim-flag">【动画】</span>双事务逐步执行，出现脏读时明确亮徽标并解释；三种隔离级别切换</span></li>
+          <li><span class="fn">isolation_playground.html</span><span class="fd"><span class="anim-flag">【动画】</span>双事务逐步执行，出现脏读时明确亮徽标并解释；四种隔离级别切换</span></li>
         </ul>
         <div class="note">
           关键认知：<b>ACID 不是四兄弟，是分工</b>——原子性靠 undo log，持久性靠 redo log + fsync，
@@ -381,7 +381,7 @@
       <div class="dot">5</div>
       <div class="stage-card">
         <div class="stage-head">
-          <h3>👑 化境期 · 查询处理器内幕</h3>
+          <h3>👑 第 5 关 · 结丹期 · 查询处理器内幕</h3>
           <span class="badge">优化器是个会计</span>
           <a class="badge" href="query_internals/index.html">进入本关 →</a>
         </div>
@@ -396,7 +396,7 @@
           <li><span class="fn">explain_pipeline.html</span><span class="fd"><span class="anim-flag">【动画】</span>SQL → 语法树 → 重写 → 优化器代价表 → 火山模型 next() 流动 → 结果</span></li>
         </ul>
         <div class="note">
-          实测：<b>统计过期时优化器估 157 选了错计划，真实执行慢 973 倍</b>；<code>ANALYZE</code> 后改选正确计划（代价 1072.5）。
+          实测：<b>统计过期时优化器把 C 计划估成 157（真实 152710），估错 973 倍，于是选了它；实际比正确的 A 计划慢 142 倍</b>；<code>ANALYZE</code> 后改选正确计划（代价 1072.5）。
         </div>
       </div>
     </div>
@@ -429,7 +429,7 @@
       <div class="dot">7</div>
       <div class="stage-card">
         <div class="stage-head">
-          <h3>🏆 大师期 · 手搓迷你数据库 miniDB</h3>
+          <h3>🏆 第 7 关 · 手搓期 · 手搓迷你数据库 miniDB</h3>
           <span class="badge hot">毕业设计</span>
           <a class="badge" href="minidb/index.html">进入本关 →</a>
         </div>
@@ -446,8 +446,8 @@
           <li><span class="fn">phase6_bench.cpp</span><span class="fd">汇总基准，并与真 SQLite 20 万行对照，差距如实打印并解释</span></li>
         </ul>
         <div class="note">
-          本机实测数字：B+ 树点查比全表扫描快 <b>756 倍</b>、范围查快 <b>20770 倍</b>（树高 2、5 万条、命中率 100%）；
-          三种崩溃场景<b>全部恢复成功</b>且全表总和守恒；写吞吐 <b>SQLite 仍比我们快 1.5 倍</b>——差距在哪，phase6 注释里逐条写清了。
+          本机实测数字（树高 2、5 万条、命中率 100% 时；这是耗时比值，每次跑会浮动几个百分点）：B+ 树点查比全表扫描快约 <b>770 倍</b>、范围查快约 <b>5200 倍</b>；
+          三种崩溃场景<b>全部恢复成功</b>且全表总和守恒；写吞吐 <b>SQLite 仍比我们快约 1.4 倍</b>（本次 404.5ms vs 582.5ms）——差距在哪，phase6 注释里逐条写清了。
         </div>
       </div>
     </div>
@@ -458,8 +458,9 @@
 <section>
   <h2>三、环境与命令</h2>
   <p>
-    你的机器已具备全部条件：MSYS2 UCRT64 的 <code>g++ 15.2</code>、<code>sqlite3 3.51</code>（含开发头文件与静态库）。
-    <strong>没有 CMake，也不需要</strong>——所有示例刻意做成单文件，直接 <code>g++</code> 就能编译。
+    作者验证环境是 MSYS2 UCRT64 的 <code>g++ 15.2</code> + <code>SQLite 3.51</code>（含开发头文件与静态库）；
+    你只需要任意 C++17 编译器（g++ / clang++ / MSVC）和可选的 SQLite 开发库。
+    <strong>不需要 CMake</strong>——所有示例刻意做成单文件，直接 <code>g++</code> 就能编译。
   </p>
 
 <pre><span class="c"># 1) 跑 SQL 剧本（内存库，不留文件）</span>
@@ -486,7 +487,8 @@ sqlite&gt; .schema loans
       ① <strong>SQLite 外键默认关闭</strong>，每个新连接都要 <code>PRAGMA foreign_keys = ON;</code>，否则非法数据悄悄插进去，
       你会误以为外键没用（它是连接级、不是库级）。
       ② <code>fundamentals/02_schema_design.sql</code> 和 <code>transactions/01_acid_in_sqlite.sql</code>
-      跑完<strong>退出码是 1</strong>，那是刻意制造的约束冲突与锁冲突演示，不是文件坏了。
+      里含有<strong>刻意制造的约束冲突 / 锁冲突</strong>。加 <code>-bail</code> 会当场停下；
+      不加 <code>-bail</code> 会继续跑完后面的演示，但 sqlite3 最终<strong>退出码仍可能是 1</strong>。看到报错别慌，那是剧本的一部分。
       ③ 程序里生成的 <code>.db</code> / <code>.exe</code> 用完自己删，别留在库里。
     </p>
   </div>
@@ -539,7 +541,7 @@ sqlite&gt; .schema loans
 </section>
 
 <div class="footer">
-  <p>数据库修炼路线图 · 全部 22 个 C++ 示例已在 g++ 15.2 实测编译通过 · 9 个动画零外部依赖可离线运行</p>
+  <p>数据库修炼路线图 · 22 个 C++ 示例已在 g++ 13 / 15（MinGW-w64）实测编译通过 · 10 个动画零外部依赖可离线运行</p>
   <p>师傅领进门，修行在个人。数据库是跑出来的，不是看出来的。</p>
 </div>
 

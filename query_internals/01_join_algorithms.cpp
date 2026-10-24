@@ -38,7 +38,7 @@ struct User {
 };
 struct Order {
     int id;
-    int uid;      // 指向 users.id，故意掺 1.5% 指向不存在的用户（悬空外键）
+    int uid;      // 指向 users.id，故意掺 2% 指向不存在的用户（悬空外键）
     int amount;
 };
 
@@ -110,7 +110,8 @@ static JoinResult joinBNL(const vector<Order>& orders, const vector<User>& users
 // 算法二：Index Join（嵌套循环 + 内层索引 —— NLJ 的"穿了鞋"版本）
 // ============================================================================
 // 外层照旧逐行流过去，但内层不再整表扫：拿 o.uid 去 users 的主键上
-// 走一棵 B+ 树。每次探测 = 树高次比较、树高页读（如果页没被 Buffer Pool 接住）。
+// 走一棵 B+ 树。每次探测 = 下降 树高 层：页读 = 树高 页（没被 Buffer Pool 接住时），
+// 比较 = 每层一次页内二分（约 log₂扇出 次），不是"树高次"那么便宜。
 // 这就是第 1 关 EXPLAIN 里 "SEARCH u USING INTEGER PRIMARY KEY" 的运行时真相。
 static JoinResult joinIndexNL(const vector<Order>& orders, const vector<User>& users) {
     JoinResult st;
@@ -137,7 +138,9 @@ static JoinResult joinIndexNL(const vector<Order>& orders, const vector<User>& u
     st.ms = chrono::duration<double, milli>(Clock::now() - t0).count();
     st.memKB = order2id.size() * sizeof(int) / 1024 + 1;
     printf("  外层 %d 行 × 树高 %d = 页读 %lld。数字吓人？\n", N_ORDERS, treeH, st.io);
-    printf("  但 users 的索引一共就 %d 页，早被 Buffer Pool 焊死在内存里，\n", treeH + 1);
+    // 索引总页数 = 叶子页 + 根页，别拿树高冒充页数（5000 行 / 100 行每页 = 50 叶 + 1 根）
+    const int idxPages = (N_USERS + 99) / 100 + 1;
+    printf("  但这棵索引满打满算就 %d 页，早被 Buffer Pool 焊死在内存里，\n", idxPages);
     printf("  真实 I/O 发生在冷缓存 / 大内表场景。小内表 + 索引 = 优化器的心头好。\n");
     return st;
 }

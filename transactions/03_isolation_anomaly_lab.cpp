@@ -18,7 +18,7 @@
  *      行锁            ≈  按 key 分片的 std::mutex（04 号文件手搓一个完整的）
  *      死锁检测        ≈  在资源等待图上找环（04 号文件）
  *      MVCC 版本链     ≈  写时复制 + 快照迭代器：读时拿一个不可变快照往下走
- *      RC vs RR        ≈  快照建立时机的差别：RC 每条语句重建，RR 事务开始就固定
+ *      RC vs RR        ≈  快照建立时机的差别：RC 每条语句重建，RR 事务内第一条读时固定
  *      乐观锁 version  ≈  std::atomic::compare_exchange_strong 的数据库版
  *      悲观锁 FOR UPDATE ≈  先 lock() 再干活
  *      rendezvous      ≈  std::barrier（C++20）/ std::latch，这里手搓一个命名版
@@ -695,7 +695,7 @@ int main() {
     std::printf("    在数据库里叫并发扣库存，是同一个 bug 的两副面孔。\n");
     std::printf("    识别它只需问一句：我的读和写之间，别人能不能插进来？\n");
     std::printf(" 3. RC 与 RR 的全部差别就是快照什么时候建立：RC 每条语句一次，\n");
-    std::printf("    RR 事务开始一次。想成 const auto snap = load() 放循环里还是循环外。\n");
+    std::printf("    RR 事务内第一条读一次。想成 const auto snap = load() 放循环里还是循环外。\n");
     std::printf(" 4. 幻读是丢失更新的亲戚，但它针对的不是某一行的值变了，而是\n");
     std::printf("    符合某条件的行集合变了。所以防它要靠范围锁（MySQL 间隙锁），\n");
     std::printf("    单行版本号挡不住 —— 新插入的行根本没有旧版本可比。\n");

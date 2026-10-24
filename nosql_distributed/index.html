@@ -237,7 +237,7 @@
         <b>写的账：写放大</b>
         写放大 = 累计落盘字节 <span class="big">÷</span> 用户字节。<br>
         flush 落一遍、compaction 再重写几遍，旧段报废也算账。
-        LSM 典型 <span class="big">2~4 倍</span>——买顺序写百倍吞吐的价签。
+        LSM 典型 <span class="big">2~5 倍</span>——买顺序写优势的价签。
       </div>
       <div class="rd">
         <b>读的账：读放大</b>
@@ -271,7 +271,7 @@
       <a class="card" href="02_lsm_vs_btree.cpp">
         <div class="no">STEP 02 · 本关账本</div>
         <div class="title"><code>02_lsm_vs_btree.cpp</code></div>
-        <div class="desc">手写 LSM-Tree（memtable→flush→L0 攒 4 段归并进 L1→层层下压，布隆 10bit/元素）与简化 B+ 树（每次插入在页里挖洞、随机 IO）正面对决。实测 LSM 写放大 2~4x、compaction 后段探测从 ~4 降到 ~1.8。四条结论逐字读三遍。</div>
+        <div class="desc">手写 LSM-Tree（memtable→flush→L0 攒 4 段归并进 L1→层层下压，布隆 10bit/元素）与简化 B+ 树（每次插入在页里挖洞、随机 IO）正面对决。实测 LSM 写放大 2~5x（顺序键 ~2.9x、随机键 ~4.6x）、compaction 后段探测从 ~4 降到 ~1.8。四条结论逐字读三遍。</div>
         <div class="tags"><span class="tag star">★ 本关心脏</span><span class="tag live">g++ 直接编译</span></div>
       </a>
       <a class="card" href="lsm_animator.html">
@@ -289,7 +289,7 @@
       <a class="card" href="cap_visualizer.html">
         <div class="no">TOOL · CAP 推演台</div>
         <div class="title"><code>cap_visualizer.html</code></div>
-        <div class="desc">手动制造网络分区：同一份数据在分区两侧各写各的，恢复后看三档一致性（线性化 / 因果 / 最终一致）各怎么收场——线性化分区期间直接拒写，最终一致悄悄分叉再合并。与 03 互为表里：03 真线程踩坑，这个把坑画给你看。</div>
+        <div class="desc">手动制造网络分区：同一份数据在分区两侧各写各的，恢复后看两档路线（CP≈线性化、AP≈最终一致）各怎么收场——CP 侧少数派直接拒写，AP 侧悄悄分叉再靠向量时钟合并；「因果一致」这一档不在按钮上，它藏在向量时钟的支配判定里。与 03 互为表里：03 真线程踩坑，这个把坑画给你看。</div>
         <div class="tags"><span class="tag tool">交互动画</span><span class="tag">双击即开</span></div>
       </a>
     </div>
@@ -303,7 +303,7 @@
       <li><b>精读 <code>02_lsm_vs_btree.cpp</code> 并跑起来</b>——盯 put 的零 IO 路径、get 的探测链、compaction 的 k 路归并（同键新值赢），最后四条结论逐字读。</li>
       <li><b>玩 <code>lsm_animator.html</code></b>——每按一次按钮前先猜右侧哪个数字会动、动多少；猜十次全对，LSM 结构才算你的。重点体验：查不存在的键时布隆帮你砍掉几段。</li>
       <li><b>跑 <code>03_concurrency_cpp.cpp</code></b>——先猜 LaggyBank 丢不丢钱，再看 EventualCluster 怎么读到旧值；版本号那段的 60/10/30ms 延迟乱序要亲眼看一遍。</li>
-      <li><b>玩 <code>cap_visualizer.html</code></b>——亲手分区、两侧写、恢复，看三档一致性的收场差异；然后做 tutorial.md 末尾 6 道练习，做完才算通关。</li>
+      <li><b>玩 <code>cap_visualizer.html</code></b>——亲手分区、两侧写、恢复，看 CP / AP 两档路线的收场差异；然后做 tutorial.md 末尾 6 道练习，做完才算通关。</li>
     </ol>
   </div>
 
@@ -325,6 +325,12 @@
       （演示完自动 <code>remove_all</code> 清场）；若中途 Ctrl+C 留下残留，手动删掉即可。
       03 的演示带真实 sleep 延迟，跑满约十几秒，别急着关窗口。
     </div>
+  </div>
+
+  <div style="margin-top:34px;padding-top:14px;border-top:1px solid var(--line);color:var(--ink-dim);font-size:.85rem;text-align:center">
+    第 6 关 · 轻剑期 · NoSQL 与分布式 ｜ 上一关：<a href="../query_internals/index.html" style="color:var(--accent)">第 5 关 · 结丹期（查询内幕）</a> ｜
+    下一关：<a href="../minidb/index.html" style="color:var(--accent)">第 7 关 · 手搓期（手搓 miniDB）</a> ｜
+    <a href="../数据库学习路线图.html" style="color:var(--accent)">返回总路线图</a>
   </div>
 
 </div>

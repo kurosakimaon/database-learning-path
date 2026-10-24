@@ -83,8 +83,14 @@
 </style>
 </head>
 <body>
-<h1>双事务隔离级别游乐场 <span class="tag">—— 同一份脚本，四种级别四种结局</span></h1>
+<h1>双事务隔离级别游乐场 <span class="tag">—— 同一份脚本，四种级别各自蹦的异常</span></h1>
 <p class="sub">左右两个事务按脚本逐步执行，中间是共享数据表和锁状态。切换隔离级别或预设场景，看同一条脚本会不会蹦出异常徽标。</p>
+<p class="sub">模型口径：RU 能看见对方未提交的写；RC 每条语句现取已提交值；RR/SER 在事务内<b>第一条成功的读</b>上拍快照；SER 额外给读加 S 锁、写加 X 锁（允许自己的 S 升级为 X），检测到互相等待就回滚其中一个 ——
+<b>这套锁口径跟的是 InnoDB（2PL + 等待图）</b>；PostgreSQL 的 SERIALIZABLE 是另一条路（SSI：谓词锁 + 读写冲突环，它不阻塞读，而是直接抛 <code>40001</code> 让应用重试），
+它的 RR（叫 Snapshot Isolation）连本页的丢失更新都不允许，第二个写者会被当场拒绝。
+另外本页只演脏读 / <b>读偏斜</b>（快照撕裂）/ 丢失更新 / 死锁这四种，<b>没有建模不可重复读、幻读与写偏斜</b>：
+三个场景里 T2 每次读的都是<b>不同的行</b>，没有"同一行读两次"的脚本（想看真·不可重复读去 <code>03_isolation_anomaly_lab.cpp</code> 实验 B），
+也没有「范围查询 + 并发插入」和两个事务改不同行的耦合约束。到"看懂异常"这一层为止。</p>
 
 <div class="bar">
   <span class="lab">预设场景</span>
@@ -163,17 +169,17 @@
       A: [
         { op: 'begin', txt: 'BEGIN' },
         { op: 'select', res: 'sku_1', txt: 'SELECT 库存（读到 100）' },
-        { op: 'calc', txt: '业务：算出应扣 1 → 写回 99', write: 'sku_1', val: 99 },
-        { op: 'update', res: 'sku_1', txt: 'UPDATE 库存 = 99（覆盖写）', set: 99 },
+        { op: 'calc', txt: '业务：按读到的值算，应扣 1', write: 'sku_1', val: 99 },
+        { op: 'update', res: 'sku_1', txt: 'UPDATE 库存 = 99（把应用层算好的绝对值写回去）', d: -1 },
         { op: 'commit', txt: 'COMMIT' }
       ],
       B: [
         { op: 'begin', txt: 'BEGIN' },
         { op: 'select', res: 'sku_1', txt: 'SELECT 库存（也读到 100）' },
-        { op: 'calc', txt: '业务：算出应扣 1 → 写回 99', write: 'sku_1', val: 99 },
-        { op: 'update', res: 'sku_1', txt: 'UPDATE 库存 = 99（覆盖写）', set: 99 },
+        { op: 'calc', txt: '业务：按读到的值算，应扣 1', write: 'sku_1', val: 99 },
+        { op: 'update', res: 'sku_1', txt: 'UPDATE 库存 = 99（同样把算好的绝对值写回去）', d: -1 },
         { op: 'commit', txt: 'COMMIT' },
-        { op: 'check_stock', txt: '校验：扣了两单，库存应为 98' }
+        { op: 'check_stock', txt: '校验：两单都成功应为 98；有事务被回滚则为 99' }
       ]
     },
     {
@@ -216,29 +222,31 @@
     var d = freshData(scene);
     return {
       base: d,                          // 基线（已提交值）
-      pend: {},                         // T1 未提交的覆盖值 res->val
-      dirty: {},                        // res -> true：此刻值含未提交改动
+      pend: { A: {}, B: {} },           // 各事务未提交的覆盖值 res->val
       locks: {},                        // res -> {x:'A'|'B'|null, s:{A?:1,B?:1}}
+      waitFor: { A: null, B: null },    // 每个事务正等谁释放锁（死锁检测用）
+      aborted: { A: false, B: false },  // 被死锁检测回滚的事务
       stepA: 0, stepB: 0, doneA: false, doneB: false,
-      t1commitHappened: false,
-      rrSnapA: null, rrSnapB: null,     // RR/RU 快照：res->值
+      rrSnapA: null, rrSnapB: null,     // RR/SER 快照：res->值
       readLogB: [], anomaly: null, running: null, runIdx: 0
     };
   }
 
   // ---------- 取值（模拟隔离级别）----------
   function valueOf(res, who) {
-    // 自己未提交的写永远自己可见（这里只有 update 直接改 base，简化：update 走 commit 队列）
+    // 自己的未提交写，任何级别都自己可见
+    if (S.pend[who][res] !== undefined) return S.pend[who][res];
     if (level === 'RU') {
-      // 脏读：能看见 pend
-      if (res in S.pend) return S.pend[res];
+      // 脏读：能看见对方未提交的写
+      var other = who === 'A' ? 'B' : 'A';
+      if (S.pend[other][res] !== undefined) return S.pend[other][res];
       return S.base.rows[res].bal;
     }
     if (level === 'RC') {
-      // 只看已提交：pend 不可见；本步骤读取时的已提交值
+      // 只看已提交：对方 pend 不可见，每条语句现取
       return S.base.rows[res].bal;
     }
-    // RR / SER：读快照
+    // RR / SER：读事务快照
     var snap = (who === 'A') ? S.rrSnapA : S.rrSnapB;
     if (snap && res in snap) return snap[res];
     return S.base.rows[res].bal;
@@ -247,20 +255,29 @@
   function takeSnap(who) {
     var snap = {};
     for (var k in S.base.rows) if (!S.base.rows[k].calc) snap[k] = S.base.rows[k].bal;
-    if (who === 'A') { if (level === 'RR' || level === 'SER') if (!S.rrSnapA) S.rrSnapA = snap; }
-    else { if (level === 'RR' || level === 'SER') if (!S.rrSnapB) S.rrSnapB = snap; }
+    if (who === 'A') { if (!S.rrSnapA) S.rrSnapA = snap; }
+    else { if (!S.rrSnapB) S.rrSnapB = snap; }
   }
 
   // ---------- 锁 ----------
   function lockOf(res) { if (!S.locks[res]) S.locks[res] = { x: null, s: {} }; return S.locks[res]; }
+  function heldByOther(L, tx) {
+    if (L.x && L.x !== tx) return L.x;
+    for (var t in L.s) if (t !== tx) return t;
+    return null;
+  }
   function acquire(tx, res, mode) {
-    // SER：select 拿 S，update 拿 X，冲突就阻塞（简化：动画里谁先拿谁赢，后者显示"等待锁…"）
+    // SER：select 拿 S，update 拿 X，锁持有到事务结束
     var L = lockOf(res);
     if (mode === 'X') {
-      if (L.x || Object.keys(L.s).length) return false;
-      L.x = tx; return true;
+      // 自己已持有 S 时允许升级；只排斥别人的 X/S
+      if (L.x && L.x !== tx) return false;
+      for (var t in L.s) if (t !== tx) return false;
+      L.x = tx;
+      delete L.s[tx];   // X 已经盖住 S，两把都留着会让锁面板显示"一个事务同时持 S 和 X"
+      return true;
     }
-    if (L.x) return false;
+    if (L.x && L.x !== tx) return false;
     L.s[tx] = 1; return true;
   }
   function releaseAll(tx) {
@@ -269,36 +286,44 @@
       if (L.x === tx) L.x = null;
       delete L.s[tx];
     }
+    S.waitFor[tx] = null;
   }
   function usesLocks() { return level === 'SER'; }
+  function clearWaitMarks(tx) {
+    S.waitFor[tx] = null;
+    var mk = S['mark' + tx];
+    if (!mk) return;
+    for (var i in mk) if (mk[i] === '等待锁…') delete mk[i];
+  }
+  function clearOwnMark(tx, i) {
+    if (S['mark' + tx]) delete S['mark' + tx][i];
+  }
 
   // ---------- 执行一步 ----------
   function step(tx) {
-    if (S.anomaly && S.anomaly.blocking) return;
     var sc = SCENES[scene];
     var script = tx === 'A' ? sc.A : sc.B;
     var i = tx === 'A' ? S.stepA : S.stepB;
     if (i >= script.length) return;
     var st = script[i];
     var other = tx === 'A' ? 'B' : 'A';
+    clearOwnMark(tx, i);
 
     if (st.op === 'begin') {
-      takeSnap(tx);                     // RR 快照在第一次"读"时拍；BEGIN 先占位，首次 select 再拍
+      // RR 快照在第一条"成功读"时拍（SER 还要先拿到 S 锁）
       log(tx + ' BEGIN（级别 ' + level + '）', tx === 'A' ? 'a' : 'b');
       setBadge(tx, '进行中', true);
     } else if (st.op === 'select') {
-      if ((level === 'RR' || level === 'SER') &&
-          !((tx === 'A' ? S.rrSnapA : S.rrSnapB))) takeSnap(tx);
       if (usesLocks()) {
         if (!acquire(tx, st.res, 'S')) {
-          markStep(tx, i, 'wait', '等待锁…');
-          log(tx + ' ' + st.txt + ' → 被 ' + other + ' 的 X 锁挡住，等待锁…', 'an');
-          setAlert('bad', '⏳ 阻塞', tx + ' 的 ' + st.txt + ' 被对方未提交的写锁挡住。Serializable 下读写互斥，T2 只能等 —— 一致性的代价就是吞吐。');
+          waitOn(tx, other, i, st, '读');
           return;                       // 不推进步骤指针
         }
       }
+      if ((level === 'RR' || level === 'SER') &&
+          !((tx === 'A' ? S.rrSnapA : S.rrSnapB))) takeSnap(tx);
       var v = valueOf(st.res, tx);
-      var dirty = !!(S.pend[st.res] !== undefined && level === 'RU');
+      var dirty = (level === 'RU' && S.pend[other][st.res] !== undefined);
       log(tx + ' ' + st.txt + ' → ' + v + (dirty ? ' ★脏数据（对方未提交）' : ''), tx === 'A' ? 'a' : 'b');
       if (dirty) anomaly('脏读 Dirty Read',
         tx + ' 读到了 ' + other + ' <b>还没 COMMIT</b> 的值 ' + v + '。只要对方一 ROLLBACK，这个值就是从未存在过的幻影。READ UNCOMMITTED 级别放任这种事 —— 生产上没人用它。');
@@ -307,35 +332,38 @@
     } else if (st.op === 'calc') {
       log(tx + ' ' + st.txt + '（内存里算的，数据库还不知道）', tx === 'A' ? 'a' : 'b');
     } else if (st.op === 'update') {
-      var newVal = ('set' in st) ? st.set : (valueOf(st.res, tx) + st.d);
-      // 写写冲突检测（带锁级别）：对方持有该资源（S 或 X）→ 阻塞
       if (usesLocks()) {
         var L = lockOf(st.res);
-        var blocked = (L.x && L.x !== tx) || L.s[other];
-        if (blocked) {
-          markStep(tx, i, 'wait', '等待锁…');
-          log(tx + ' ' + st.txt + ' → 与 ' + other + ' 的锁冲突，等待锁…', 'an');
-          setAlert('bad', '⏳ 写写冲突（阻塞）', tx + ' 想写 ' + st.res + '，但 ' + other + ' 持有锁。在真数据库里这里就是 lock wait / 死锁检测的地盘（见 04 程序）。');
+        var blocker = heldByOther(L, tx);
+        if (blocker) {
+          waitOn(tx, blocker, i, st, '写');
           return;
         }
         acquire(tx, st.res, 'X');
-      } else if (S.pend[st.res] !== undefined && otherHoldingDirty(other, st.res)) {
-        // 无锁级别：第二个写者直接覆盖 —— 写 skew 的极端形态
       }
-      // 未提交写：进 pend（RU 可见），COMMIT 才落 base
-      S.pend[st.res] = newVal;
-      S.dirty[st.res] = true;
+      // SER 的 UPDATE 读当前已提交值（等锁解除后重新基于新值算）；
+      // RC/RR 仍按本事务的读视图算，用来演示"读-改-写"丢更新。
+      var baseVal = (level === 'SER')
+        ? (S.pend[tx][st.res] !== undefined ? S.pend[tx][st.res] : S.base.rows[st.res].bal)
+        : valueOf(st.res, tx);
+      var newVal = baseVal + st.d;
+      S.pend[tx][st.res] = newVal;
       log(tx + ' ' + st.txt + ' → 暂存 ' + newVal + '（未提交）', tx === 'A' ? 'a' : 'b');
     } else if (st.op === 'wait') {
       log(tx + ' ' + (st.txt || '（停一拍）'), tx === 'A' ? 'a' : 'b');
     } else if (st.op === 'commit') {
-      for (var k in S.pend) { S.base.rows[k].bal = S.pend[k]; delete S.dirty[k]; }
-      S.pend = {};
+      var mine = S.pend[tx];
+      for (var k in mine) S.base.rows[k].bal = mine[k];
+      S.pend[tx] = {};
+      var wasWaitingOnMe = (S.waitFor[other] === tx);
       releaseAll(tx);
-      if (tx === 'A') S.t1commitHappened = true;
-      log(tx + ' COMMIT —— 暂存值落盘', tx === 'A' ? 'a' : 'b');
+      log(tx + ' COMMIT —— 本事务暂存值落盘', tx === 'A' ? 'a' : 'b');
       S['done' + tx] = true;
       setBadge(tx, '已提交', false);
+      if (wasWaitingOnMe) {
+        clearWaitMarks(other);          // 锁释放了，对方可以重试被挡住的步骤
+        log(other + ' 的锁等待解除，再点一次即可继续', 'sys');
+      }
     }
 
     S[tx === 'A' ? 'stepA' : 'stepB'] = i + 1;
@@ -346,7 +374,41 @@
     }
     render();
   }
-  function otherHoldingDirty(other, res) { return S.dirty[res]; }
+
+  function waitOn(tx, blocker, i, st, kind) {
+    S.waitFor[tx] = blocker;
+    markStep(tx, i, 'wait', '等待锁…');
+    log(tx + ' ' + st.txt + ' → 被 ' + blocker + ' 的锁挡住，等待锁…', 'an');
+    if (S.waitFor[blocker] === tx) {
+      // 等锁图上出现环：tx 等 blocker，blocker 又在等 tx
+      abortTx(tx, blocker);
+      return;
+    }
+    setAlert('bad', '⏳ 阻塞', tx + ' 想' + kind + ' ' + st.res + '，但 ' + blocker +
+      ' 持有冲突锁。等对方提交/回滚后，再点一次 ' + tx + ' 的这一步即可继续。');
+  }
+
+  function abortTx(tx, blocker) {
+    var script = SCENES[scene][tx];
+    var i = S['step' + tx];
+    S.pend[tx] = {};                    // 丢弃全部未提交写
+    S.aborted[tx] = true;
+    S['done' + tx] = true;
+    releaseAll(tx);
+    clearWaitMarks(tx);
+    clearWaitMarks(blocker);            // 牺牲者走了，对方的锁冲突消失
+    // 跳到后续第一个 check 步骤，保留"事后验账"
+    var j = i + 1;
+    while (j < script.length && script[j].op.indexOf('check') !== 0) j++;
+    S['step' + tx] = j;
+    setBadge(tx, '已回滚（死锁牺牲者）', false);
+    log('✖ ' + tx + ' 被死锁检测回滚：它等 ' + blocker + '，而 ' + blocker + ' 正在等它。', 'an');
+    log('  回滚 = 丢弃本事务全部未提交写 + 释放锁；' + blocker + ' 的等待解除。', 'an');
+    setAlert('bad', '♻ 死锁：回滚 ' + tx,
+      '两个事务各持一把 S 锁，又都想升级成 X —— 典型死锁。数据库必须挑一个牺牲者回滚，' +
+      '否则两边永远等下去。这就是 SERIALIZABLE 的代价：冲突时事务可能失败，应用必须能重试。');
+    render();
+  }
 
   // ---------- 校验步骤（异常裁判）----------
   // 通过钩子实现，避免把裁判逻辑撒进 step()
@@ -354,31 +416,55 @@
     if (st.op === 'check_sum') {
       var readAll = S.readLogB.some(function (r) { return r.res === 'bob'; });
       if (!readAll) {
-        good('T2 还卡在锁上：Serializable 下读会被对方未提交的写挡住。等 T1 提交后再点一次 T2 的 SELECT，拿到的就是事务级一致快照 —— 一致性的代价是等。');
+        if (S.waitFor.B)
+          good('T2 还卡在锁上：Serializable 下读会被对方未提交的写挡住。等 T1 提交后再点一次 T2 的 SELECT，拿到的就是事务级一致快照 —— 一致性的代价是等。');
+        else
+          good('T2 还没读到 bob 那一行 —— 现在是「没走到」，不是「被挡住」：把 T2 的下一步点下去再说。');
         return;
       }
       var a = lastVal('alice'), b = lastVal('bob');
       var sum = (a === undefined ? 0 : a) + (b === undefined ? 0 : b);
       if (sum !== 800 && sum !== 0)
-        anomaly('不可重复读 / 撕裂快照 Non-repeatable Read',
-          'T2 两次 SELECT 之间 T1 提交了：alice 读到 ' + a + '（旧），bob 读到 ' + b + '（新），总额 ' + sum + ' ≠ 800。<b>RC 的每条语句一个快照</b>，跨语句的读不保证同一世界。报表/对账场景这就是事故。');
+        anomaly('读偏斜 Read Skew（快照被撕开）',
+          'T2 两次 SELECT 之间 T1 提交了：alice 读到 ' + a + '（旧），bob 读到 ' + b + '（新），总额 ' + sum + ' ≠ 800。<b>RC 的每条语句一个快照</b>，跨语句的读不保证同一世界。报表/对账场景这就是事故。' +
+          '<b>名词要抠准</b>：同一行读两次、两次不一样才叫<b>不可重复读</b>（Non-Repeatable Read）；各读一行、拼起来对不上叫<b>读偏斜</b>（Read Skew），这一屏是后者。');
       else
         good('校验通过：总额 ' + sum + '。' + (level === 'RR' || level === 'SER' ? '快照钉死 / 读加锁，T1 的提交插不进来。' : '这次时序恰好没撞上 —— 换个交错顺序再试试 RC。'));
     } else if (st.op === 'check_stock') {
-      var cur = S.base.rows['sku_1'].bal;
-      if (cur === 99)
+      var pa = S.pend.A['sku_1'], pb = S.pend.B['sku_1'];
+      var cur = pa !== undefined ? pa : (pb !== undefined ? pb : S.base.rows['sku_1'].bal);
+      var aborts = (S.aborted.A ? 1 : 0) + (S.aborted.B ? 1 : 0);
+      if (aborts) {
+        if (cur === 99)
+          good('库存 = 99：有事务被死锁检测回滚，只成交一单 —— 这是正确结果。' +
+               'SERIALIZABLE 不保证"都能提交"，它保证"提交了的那些等价于某个串行顺序"，失败的一方由应用重试。');
+        else
+          anomaly('库存异常', '期望 99（被回滚的一方只成交一单），实际 ' + cur +
+            '。回滚只该丢弃<b>牺牲者自己</b>那笔未提交的写，赢家的写必须留下 —— 现在两个都被丢掉或都没丢掉，说明这一屏的账不对，点「重置」重来一遍。');
+      } else if (cur === 99) {
         anomaly('丢失更新 Lost Update',
-          '两个事务都读 100、都算 99、都写回 99 —— 扣了两单库存只减 1。<b>快照读救不了"读-改-写"</b>：RR 的快照让双方都心安理得读到 100。修法：单条 <code>UPDATE stock SET n = n - 1</code>、SELECT FOR UPDATE、或版本号 CAS（03 程序三种修法都实测过）。');
-      else
-        good('库存 = ' + cur + '，没丢。' + (level === 'SER' ? 'Serializable 下第二个 UPDATE 被锁挡住，等第一个提交后才基于新值算（动画里简化为直接放行到脚本下一步）。' : '注意：这靠的是时序运气，不是级别保证。RC/RR 下把交错改成 A读→B读→A写→B写 必丢。'));
+          '两个事务都读 100、都写回 99 —— 扣了两单库存只减 1。<b>快照读救不了"读-改-写"</b>：RR 的快照让双方都心安理得读到 100。' +
+          '注意丢更新的是「把应用层算好的<b>绝对值</b>写回去」这种写法；单条 <code>UPDATE stock SET n = n - 1</code> 走的是<b>当前读</b> —— ' +
+          '它必须先看该行此刻的真值、还要拿住行锁，两个事务天然串行，不会丢。' +
+          '修法三条：改成 <code>SET n = n - 1</code> 的数据库侧自减、<code>SELECT ... FOR UPDATE</code> 把读-改-写圈进锁里、或版本号 CAS（03 程序三种修法都实测过）。');
+      } else if (cur === 98) {
+        good('库存 = 98，两单都扣到了。' + (level === 'SER'
+          ? 'Serializable 下写锁把并发改成了串行：后一个事务等前一个提交后基于新值再算。'
+          : '这次时序恰好让两次读-改-写串行化了 —— 但 RC/RR 不保证这一点，换个交错就会丢。'));
+      } else {
+        anomaly('库存异常', '期望 98（两单都成功）或 99（一单被回滚），实际 ' + cur + '。');
+      }
     } else if (st.op === 'check_snap') {
       if (S.readLogB.length >= 2) {
         var v1 = S.readLogB[0], v2 = S.readLogB[1];
         var dirtyHit = (level === 'RU' && S.readLogB.some(function (r) { return r.dirty; }));
         // 判断两次读之间是否混入了 T1 的提交效果
         if (v1.val !== snapshotBase(v1.res) && (level === 'RC'))
-          anomaly('不可重复读 Non-repeatable Read',
-            'T2 读华东时是 ' + v1.val + '，读华南之前 T1 提交了 —— 同一份报表里华东是旧世界、华南是新世界，快照被"撕"开了。RC 下跨语句读不保证一致，报表要么上 RR，要么 <code>START TRANSACTION READ ONLY</code> 拿事务级快照。');
+          anomaly('读偏斜 Read Skew（快照被撕开）',
+            'T2 读华东时是 ' + v1.val + '，读华南之前 T1 提交了 —— 同一份报表里华东是旧世界、华南是新世界，快照被"撕"开了。RC 下跨语句读不保证一致，报表要么上 RR，要么 <code>START TRANSACTION READ ONLY</code> 拿事务级快照。' +
+            '<b>名词要抠准</b>：这里两次读的是<b>不同的行</b>（华东、华南各读一次），所以叫<b>读偏斜</b>（Read Skew / 快照撕裂）；' +
+            '把<b>同一行</b>读两次、两次值不一样才叫<b>不可重复读</b>（Non-Repeatable Read）—— 本页三个场景都没有"同一行读两次"的脚本，' +
+            '要看真正的不可重复读去 <code>03_isolation_anomaly_lab.cpp</code> 实验 B（同一连接两次读同一行）。');
         else
           good('两次读数来自' + (level === 'RU' ? '各自现取的世界（脏：' + (dirtyHit ? '含未提交值' : '暂无未提交') + '）' : '同一个快照') + '：华东 ' + v1.val + '、华南 ' + v2.val + '。');
       }
@@ -394,7 +480,7 @@
 
   // ---------- 异常/提示 ----------
   function anomaly(title, body) {
-    S.anomaly = { title: title, blocking: false };
+    S.anomaly = { title: title };
     setAlert('bad', '🚨 ' + title, body);
     log('★ 异常发生：' + title, 'an');
   }
@@ -448,18 +534,21 @@
     // 数据表
     var sc = SCENES[scene], tbName = Object.keys(sc.tables)[0];
     var rows = S.base.tables[tbName];
-    var html = '<tr><th>' + tbName + '.key</th><th>bal（当前视角）</th><th>状态</th></tr>';
+    var html = '<tr><th>' + tbName + '.key</th><th>bal（已提交）</th><th>未提交写</th></tr>';
     for (var i = 0; i < rows.length; i++) {
-      var r = rows[i], v = r.bal, mark = '';
-      if (S.pend[r.key] !== undefined) { v = S.pend[r.key]; mark = '<span style="color:var(--amber)">未提交</span>'; }
-      else mark = '<span style="color:var(--dim)">已提交</span>';
+      var r = rows[i], v = r.bal, mark = '<span style="color:var(--dim)">已提交</span>';
+      var pa = S.pend.A[r.key], pb = S.pend.B[r.key], sts = [];
+      if (pa !== undefined) sts.push('T1 → ' + pa);
+      if (pb !== undefined) sts.push('T2 → ' + pb);
+      if (sts.length) mark = '<span style="color:var(--amber)">' + sts.join(' / ') + '</span>';
       if (r.calc) {
         var sum = 0, found = false;
         for (var k in S.base.rows) if (!S.base.rows[k].calc) {
           found = true;
-          sum += (S.pend[k] !== undefined ? S.pend[k] : S.base.rows[k].bal);
+          sum += S.base.rows[k].bal;
         }
         if (found) v = sum;
+        if (pa !== undefined || pb !== undefined) mark += ' <span style="color:var(--dim)">（另有未提交）</span>';
       }
       html += '<tr><td>' + r.key + '</td><td class="val">' + v + '</td><td>' + mark + '</td></tr>';
     }
@@ -472,10 +561,10 @@
       if (L.x) lh += '<span class="lockchip chip-x">' + res + ' ← T' + (L.x === 'A' ? '1' : '2') + ' 持 X</span>';
       for (var t in L.s) lh += '<span class="lockchip chip-s">' + res + ' ← T' + (t === 'A' ? '1' : '2') + ' 持 S</span>';
     }
-    var waiting = false;
-    if (S.markA) for (var m in S.markA) if (S.markA[m] === '等待锁…') waiting = true;
-    if (S.markB) for (var m2 in S.markB) if (S.markB[m2] === '等待锁…') waiting = true;
-    if (waiting) lh += '<span class="lockchip chip-wait">⏳ 有事务在等待锁…</span>';
+    if (S.aborted.A) lh += '<span class="lockchip chip-wait">T1 已回滚</span>';
+    if (S.aborted.B) lh += '<span class="lockchip chip-wait">T2 已回滚</span>';
+    if (S.waitFor.A) lh += '<span class="lockchip chip-wait">⏳ T1 等 T' + (S.waitFor.A === 'A' ? '1' : '2') + ' 释放锁</span>';
+    if (S.waitFor.B) lh += '<span class="lockchip chip-wait">⏳ T2 等 T' + (S.waitFor.B === 'A' ? '1' : '2') + ' 释放锁</span>';
     $('lockline').innerHTML = lh || '（无锁）';
 
     renderSteps('A'); renderSteps('B');
@@ -494,10 +583,11 @@
 
   // ---------- 自动交错 ----------
   // 每个字母 = 对应事务执行下一步。交错顺序是挑好的：专挑最容易蹦异常的节奏。
+  // 被锁挡住的那一步不推进指针，所以计划里多留一次重试点（SER 用得上）。
   var INTERLEAVE = {
-    0: ['A', 'B', 'A', 'B', 'A', 'A', 'B', 'B'],
-    1: ['A', 'B', 'A', 'B', 'A', 'B', 'A', 'B', 'A', 'B', 'B'],
-    2: ['B', 'A', 'A', 'B', 'A', 'A', 'A', 'B', 'B']
+    0: ['A', 'B', 'A', 'B', 'A', 'A', 'B', 'B', 'B'],
+    1: ['A', 'B', 'A', 'B', 'A', 'B', 'A', 'B', 'A', 'A', 'B', 'B'],
+    2: ['B', 'A', 'A', 'B', 'A', 'A', 'A', 'B', 'B', 'B']
   };
   function autoRun() {
     var plan = INTERLEAVE[scene];
@@ -508,6 +598,9 @@
   }
   function toggleAuto() {
     if (S.running) { clearTimeout(S.running); S.running = null; $('btnAuto').textContent = '▶ 顺序交错执行'; return; }
+    // 交错计划已经跑完时再点 ▶ 会立刻撞上 runIdx 边界、变成一颗没反应的按钮，
+    // 所以跑完的情况下先重置再从头演；中途停下（上面的■）仍然继续原来的进度。
+    if (S.runIdx >= INTERLEAVE[scene].length) loadScene();
     $('btnAuto').textContent = '■ 停止';
     S.running = setTimeout(autoRun, 200);
   }

@@ -596,7 +596,7 @@ static void demo4_lock_ordering() {
     auto runOnce = [&](bool sortedOrder) {
         LockManager lm(true);
         std::atomic<TxnId> nextTxn{1};
-        std::atomic<int> deadlocks{0}, okTxn{0}, retries{0};
+        std::atomic<int> deadlocks{0}, timeouts{0}, okTxn{0}, retries{0};
         long long total[5] = {100, 100, 100, 100, 100};   // 只在线程退出后读，无需加锁
         std::vector<std::thread> ts;
 
@@ -625,7 +625,10 @@ static void demo4_lock_ordering() {
                         }
                         lm.releaseAll(t);
                         lm.forget(t);
-                        ++deadlocks;
+                        // 分开记账：死锁检测掐掉的 vs 800ms 等不动自己超时的。
+                        // 混成一个数报出去，就成了"死锁率"虚高。
+                        if (x1 == Acquire::Timeout || x2 == Acquire::Timeout) ++timeouts;
+                        else ++deadlocks;
                         if (attempt > 0) ++retries;
                         // 死锁/超时后重试，最多 50 次防止理论上的活锁
                         if (attempt > 50) { std::printf("  ✘ 重试上限，退出\n"); break; }
@@ -636,20 +639,25 @@ static void demo4_lock_ordering() {
         for (auto& th : ts) th.join();
         long long sum = 0;
         for (int i = 0; i < kAccts; ++i) sum += total[i];
-        std::printf("  %-10s：提交 %4d 次，死锁回滚 %3d 次，死锁率 %5.2f%%，总额 %lld %s\n",
+        int aborts = deadlocks.load() + timeouts.load();
+        std::printf("  %-10s：提交 %4d 次，回滚 %3d 次（死锁 %d + 等待超时 %d），回滚率 %5.2f%%，总额 %lld %s\n",
                     sortedOrder ? "排序加锁" : "随机加锁",
-                    okTxn.load(), deadlocks.load(),
-                    100.0 * deadlocks.load() / (okTxn.load() + deadlocks.load()),
+                    okTxn.load(), aborts, deadlocks.load(), timeouts.load(),
+                    100.0 * aborts / (okTxn.load() + aborts),
                     sum, sum == 500 ? "守恒 ✔" : "不守恒 ✘");
-        return deadlocks.load();
+        return aborts;
     };
 
     int rnd = runOnce(false);
     int srt = runOnce(true);
-    std::printf("  结论：随机序死锁 %d 次，排序后 %d 次。\n", rnd, srt);
+    std::printf("  结论：随机序回滚 %d 次，排序后 %d 次。\n", rnd, srt);
+    std::printf("  （口径：上面报的是【回滚率】= 死锁 + 拿锁超时，不是纯死锁率；"
+                "把超时也算进「死锁」是线上看板最常见的自欺。这两次跑下来超时为 0，"
+                "但 800ms 的预算一变，两个数就会分家。）\n");
     std::printf("  一招致胜：所有事务按【同一全序】取锁（资源名排序、按 id 排序、分片路由）。\n");
     std::printf("  等待图找环是【事后抢救】，固定加锁顺序是【事前预防】，能预防就别抢救。\n");
-    std::printf("  C++ 同款：std::scoped_lock(m1, m2) 内部就用死锁避免算法统一加锁顺序，\n");
+    std::printf("  C++ 同款：std::scoped_lock(m1, m2) 内部调用 std::lock，用 try-and-back-off\n");
+    std::printf("            死锁避免算法同时锁多把 mutex；它不是按地址排序，也不提供全局加锁顺序。\n");
     std::printf("          而手写 lock(m1); lock(m2) 反序就会死 —— 和转账一模一样。\n");
 }
 
@@ -721,7 +729,7 @@ int main() {
     std::printf("    行锁 ↔ 分片 mutex；死锁 ↔ 反序 lock；等待图 ↔ 资源分配图找环；\n");
     std::printf("    锁超时 ↔ try_lock_for；受害者回滚 ↔ 释放全部锁后整段重试。\n\n");
     std::printf(" 练习：\n");
-    std::printf("  1. 把演示 4 的 kAccts 从 5 改成 50，死锁率怎么变？为什么？\n");
+    std::printf("  1. 把演示 4 的 kAccts 从 5 改成 50，回滚率怎么变？为什么？\n");
     std::printf("  2. 给 LockManager 加一个 wait-die / wound-wait 策略（用事务号当时间戳），\n");
     std::printf("     和「检测+回滚」对比：谁的重试次数少？\n");
     std::printf("  3. 加意向锁 IS/IX：模拟「一个事务锁全表、另一个锁某一行」的冲突判定。\n");

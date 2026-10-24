@@ -69,7 +69,7 @@ struct Bloom {
     template <class It>
     Bloom(It begin, It end) {
         size_t n = static_cast<size_t>(std::distance(begin, end));
-        m_ = std::max<size_t>(n * 10, 64); // 每元素 10 bit，约 1% 误判率
+        m_ = std::max<size_t>(n * 10, 64); // 每元素 10 bit + 2 个哈希，误判率约 3%（理论最优约 1%）
         bits.assign(m_, false);
         for (It it = begin; it != end; ++it) add(it->first);
     }
@@ -538,7 +538,7 @@ int main() {
               << mb(lsmRnd.bytesWritten()) << " | 写放大 "
               << (double)lsmRnd.bytesWritten() / lsmRnd.userBytes() << "x\n";
     std::cout << "    ↑ 注意：落盘字节全部是【顺序写】——这就是 RocksDB 敢把写 QPS\n";
-    std::cout << "      做到机械盘也飞起的根本原因。写放大约 2~4x：compaction 把同一字节\n";
+    std::cout << "      做到机械盘也飞起的根本原因。写放大约 2~5x（顺序键 ~2.9x、随机键 ~4.6x）：compaction 把同一字节\n";
     std::cout << "      反刍重写了好几遍，代价从「随机 IO」换成了「多写几遍+后台抖动」。\n\n";
 
     std::cout << "  B+ 树（每次写入 = 下降到目标页 + 就地改 + 落盘）\n";
@@ -650,7 +650,7 @@ int main() {
                  "      LSM  ：写延迟结算（先攒后刷，全顺序 IO），代价摊到\n"
                  "             写放大（数据被反刍重写 2~10 遍）和读放大（多层找）。\n"
                  " 2. 为什么写多的系统（RocksDB/Cassandra/HBase）全投了 LSM？\n"
-                 "      盘的特性：顺序写吞吐是随机写的百倍级；写还能被压缩摊薄。\n"
+                 "      盘的特性：机械盘上顺序写吞吐是随机写的百倍级（NVMe 上差距小得多）；写还能被压缩摊薄。\n"
                  "      读放大有现代补丁：布隆过滤器（本文件演示了它的省钱效果）、\n"
                  "      分层索引、页缓存、后台限速——读慢可以救，写碎没好药。\n"
                  " 3. InnoDB 为什么守着 B+ 树不走？\n"

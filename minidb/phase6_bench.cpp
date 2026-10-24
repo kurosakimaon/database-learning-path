@@ -93,11 +93,14 @@ double nowMs() {
     return std::chrono::duration<double, std::milli>(
                std::chrono::steady_clock::now().time_since_epoch()).count();
 }
-// 统一打印一行对比结果：项目 | MiniDB | SQLite | 倍数
+// 统一打印一行对比结果：项目 | MiniDB | SQLite | 谁更快
 void cmpLine(const std::string &item, const std::string &mini,
              const std::string &lite, double ratio) {
-    char r[32];
-    std::snprintf(r, sizeof r, "%.1f 倍", ratio);
+    char r[48];
+    if (ratio >= 1.0)
+        std::snprintf(r, sizeof r, "MiniDB 慢 %.1f 倍", ratio);
+    else
+        std::snprintf(r, sizeof r, "MiniDB 快 %.1f 倍", ratio > 1e-9 ? 1.0 / ratio : 0.0);
     std::cout << "  " << padR(item, 24) << padR(mini, 26) << padR(lite, 26) << r << "\n";
 }
 

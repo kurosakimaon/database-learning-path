@@ -1,21 +1,27 @@
-# 第四关 · 兵器期 —— 用 C++ 把数据库接起来
+# 第 4 关 · 兵器期 —— 用 C++ 把数据库接起来
 
 （老师傅带徒弟 · 简体中文 · 本机可跑）
 
 ## 〇、开工之前，师傅先把环境说死
 
-徒弟啊，这一关跟前三个关不一样。前三个关你在 SQL 里打转，这一关你要动手
+徒弟啊，这一关跟前几关不一样。前面几关你在 SQL 里打转，这一关你要动手
 把数据库"接进"C++ 程序里。接数据库这件事，代码量不大，坑个个要命。
 
-本机环境（我一个字一个字验证过的，你也照着核对）：
+本关只需要两样东西：**一个支持 C++17 的编译器**，和 **SQLite 的开发库**
+（头文件 + 链接库）。不需要 CMake，不需要 MySQL/PostgreSQL 服务端。
+师傅验证这一关用的环境是这样，你对照着确认自己有没有等价物即可：
 
 ```text
-g++.exe (MSYS2 UCRT64)      15.2.0
-SQLite 头文件               C:\msys64\ucrt64\include\sqlite3.h
-SQLite 静态/导入库          C:\msys64\ucrt64\lib\libsqlite3.a
-sqlite3.exe                 3.51.1
-没有 CMake，没有 MySQL，没有 PostgreSQL，不许装任何东西
+g++ (MSYS2 UCRT64)          15.2.0      ← 参考机；MinGW-w64 / Clang 亦可
+SQLite 头文件               <prefix>/include/sqlite3.h
+SQLite 静态/导入库          <prefix>/lib/libsqlite3.a（或 .so / .dll + .lib）
+sqlite3.exe                 3.51.1      ← 用于手工验证 SQL，非编译必需
 ```
+
+Linux 上一般装 `sqlite3` 开发包即可（Debian/Ubuntu：`libsqlite3-dev`）；
+Windows 用 MSYS2 的话是 `pacman -S mingw-w64-ucrt-x86_64-sqlite3`。
+链接报 "undefined reference to sqlite3_open"，九成是没加 `-lsqlite3`
+或库路径不在搜索目录里。
 
 所以本关的编译命令就一条，抄下来：
 
@@ -59,8 +65,8 @@ g++ -std=c++17 -O2 -Wall -Wextra 01_sqlite_c_api.cpp -o 01.exe -lsqlite3
 3. 用 C++17 写一个 move-only 的连接/语句封装，让"双重释放"和
    "忘记 finalize"从运行时 bug 降级成编译错误。
 4. 说清析构函数为什么不能抛异常，以及"提交失败"该在哪一层抛给上层。
-5. 拿到实测数据说服你的同事：逐条提交和单事务提交差了三个数量级
-   （本机实测 7217 倍，你机器上倍数会不同，但"两三个数量级"到处成立）。
+5. 拿到实测数据说服你的同事：逐条提交和单事务提交差了三个数量级左右
+   （参考机上约 7200 倍；你机器上倍数会不同，但"两三个数量级"到处成立）。
 6. 处理 SQLITE_BUSY：知道 WAL、busy_timeout、应用层重试这三板斧的
    先后顺序和各自适用的场景，并能读懂 busy handler 的返回值语义。
 7. 判断一个 C++ 项目该不该上 ORM，以及热路径该在什么时候退回裸 SQL。
@@ -94,10 +100,10 @@ g++ -std=c++17 -O2 -Wall -Wextra 01_sqlite_c_api.cpp -o 01.exe -lsqlite3
   你现在知道 prepare/bind、知道事务、知道池，
   再看 MySQL 那套就是"哦，把进程内换成跨网络"，秒懂。
 
-编译命令速查（PowerShell，逐条粘贴）：
+编译命令速查（PowerShell，先进入本目录；Linux/macOS 把 `.\01.exe` 换成 `./01`）：
 
 ```powershell
-cd d:\Users\Desktop\database\database-learning-path\cpp_integration
+cd database-learning-path\cpp_integration
 g++ -std=c++17 -O2 -Wall -Wextra 01_sqlite_c_api.cpp -o 01.exe -lsqlite3
 g++ -std=c++17 -O2 -Wall -Wextra 02_raii_wrapper.cpp -o 02.exe -lsqlite3
 g++ -std=c++17 -O2 -Wall -Wextra 03_thread_pool_db.cpp -o 03.exe -lsqlite3
@@ -179,7 +185,7 @@ Remove-Item *.exe, *.db, *.db-wal, *.db-shm, *.db-journal -ErrorAction SilentlyC
 
 ## 六、经验之谈 —— 数据摆在这儿，你自己看
 
-下面是本机关（g++ 15.2 + SQLite 3.51.1 + UCRT64）的真实输出，
+下面是参考机（g++ 15.2 + SQLite 3.51.1 + UCRT64）的输出，
 没有任何一个数字是编的。你跑出来会不一样，别抄数字，抄结论。
 
 ### 02 号文件 · N = 10000 条 INSERT（实测）
@@ -201,7 +207,7 @@ Remove-Item *.exe, *.db, *.db-wal, *.db-shm, *.db-journal -ErrorAction SilentlyC
 
 - 失败时代价是整批重做；
 - 挡住 WAL checkpoint，WAL 文件越撑越大；
-- 让别人读不到新数据（快照隔离的副作用）。
+- 别人在快照隔离下读到的仍是旧快照（不是被阻塞，而是看到"过时但一致"的数据）。
 
 500~5000 条一批是常见起手值，然后拿真实负载压测再定。
 
@@ -246,7 +252,9 @@ Remove-Item *.exe, *.db, *.db-wal, *.db-shm, *.db-journal -ErrorAction SilentlyC
    别把"没报错"当成"解决了"，那是掩盖。
 
 ③ SQLite 只有一个 writer，所以池从 4 压到 2 吞吐反而更高。
-   真数据库也一样：连接数超过 CPU 核数之后吞吐往下走。
+   换成 OLTP 类真数据库也一样：连接数超过"能同时干活的核数"之后，
+   排队、上下文切换、锁竞争的代价会吃掉并发收益，吞吐不再上升甚至下降。
+   I/O 密集的库能容纳更多连接，但最终也会撞到同一堵墙。
    "池越大越好"是想当然，你手里的数据说：2 就够了。
 
 ### 04 号文件 · 成本模型（不连库也能算的账）
@@ -312,6 +320,6 @@ Remove-Item *.exe, *.db, *.db-wal, *.db-shm, *.db-journal -ErrorAction SilentlyC
 让 order_placeholders() 自动变成 5 个问号。
 改完你会明白 sqlpp11 那种"改字段不用改 SQL"的爽点到底在哪。
 
-做完这七条，你就有资格进第七关 —— 手搓一个迷你数据库。
-到那时候你会发现，这一关写的每一个 RAII 封装，
+做完这七条，你就可以进第五关（结丹期）看查询内幕了。
+到第 7 关手搓迷你数据库时你会发现，这一关写的每一个 RAII 封装，
 都是在给"数据库内部本来就该有的东西"打草稿。

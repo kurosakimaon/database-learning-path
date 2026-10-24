@@ -112,7 +112,9 @@ public:
     };
 
     Pager(const std::string &path, size_t cap, bool createIfMissing) : path_(path), cap_(std::max<size_t>(1, cap)) {
-        std::fstream probe(path, std::ios::in | std::ios::binary);
+        // 用 fopen 探存在性：部分 libstdc++ 下 fstream 以 in 打开缺失文件时
+        // 虽未真正打开，failbit 却不置位，if (!probe) 会误判为"文件存在"。
+        std::FILE *probe = std::fopen(path.c_str(), "rb");
         if (!probe) {
             if (!createIfMissing) throw std::runtime_error("文件不存在且未允许创建: " + path);
             page_count_ = 1;
@@ -124,6 +126,7 @@ public:
             std::fclose(fp);   // 别忘了：不 fsync 的元数据，断电等于没建库
             return;
         }
+        std::fclose(probe);
         openExisting();
     }
 

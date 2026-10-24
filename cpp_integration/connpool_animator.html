@@ -59,9 +59,9 @@ a{color:var(--accent);}
 <div class="wrap">
 <h1>连接池可视化：三种策略，同一批请求</h1>
 <p class="sub">三个面板吃的是<b>完全相同的到达序列和相同的单请求耗时</b>（同一个随机种子生成），所以数字可以横向比。
-左边是槽位，下面是等待队列。配色：<span style="color:var(--good)">绿=空闲</span> /
-<span style="color:var(--accent)">蓝=正在用</span> / <span style="color:var(--warn)">黄=排队</span> /
-<span style="color:var(--bad)">红=超时或被拒</span>。</p>
+左边是槽位，下面是等待队列。配色：<span style="color:#155e75">深青=空闲槽</span> /
+<span style="color:var(--accent)">蓝=正在用</span> / <span style="color:var(--warn)">黄=排队（接近超时转红）</span> /
+<span style="color:var(--bad)">红字指标=超时或被拒</span>；被当场拒掉的请求画成灰色虚线圈，它连队列都没进去。</p>
 
 <div class="panel">
   <div class="ctl">
@@ -94,9 +94,9 @@ a{color:var(--accent);}
       <label>预设场景</label>
       <select id="preset">
         <option value="">自定义</option>
-        <option value="ok">MλS 远小于 1（轻松）</option>
-        <option value="edge">MλS ≈ 1（临界）</option>
-        <option value="over">MλS ≫ 1（过载）</option>
+        <option value="ok">λS/M 远小于 1（轻松）</option>
+        <option value="edge">λS/M ≈ 1（临界）</option>
+        <option value="over">λS/M ≫ 1（过载）</option>
       </select>
     </div>
   </div>
@@ -109,38 +109,54 @@ a{color:var(--accent);}
       理论需求连接数 M* = λS/1000 = <b id="mstar" style="color:var(--warn)">1.35</b>
     </span>
   </div>
-  <div class="hint" id="verdict">先点「播放」。看三个面板的<b>平均等待</b>条：策略①永远垫底，因为每个请求都要先付一次建连钱。</div>
+  <div class="hint" id="verdict">先点「播放」，然后盯三条指标：<b>平均等待</b>、<b>超时/拒绝</b>、<b>池占用</b>。策略①的等待里天生多付一笔固定的建连钱，但它「不排队」是靠<b>不限连接数</b>换来的 —— 代价没消失，只是搬到了数据库那一侧。真正要练的是把 λ 和 S 拉大，看三条曲线什么时候分道扬镳。</div>
 </div>
 
 <div class="row" id="stage"></div>
 
 <h2>三句话把这张图读完</h2>
 <table>
-<tr><th>策略</th><th>对应本机代码</th><th>排队行为</th><th>它到底在赌什么</th></tr>
+<tr><th>策略</th><th>对应同目录代码</th><th>排队行为</th><th>它到底在赌什么</th></tr>
 <tr><td>① 每请求新建连接</td><td><code>03_thread_pool_db.cpp</code> 的反面教材档</td>
     <td>不排队，因为没有限流；N 个请求就开 N 条连接</td>
-    <td>赌"建连很便宜"。本机实测：120 轮建连 658 次、1814.8 ms，还撞了 360 次锁 —— 赌输了</td></tr>
+    <td>赌"建连很便宜"。同一份代码跑下来，这一档的<b>建连次数 ≈ 请求数</b>（数量级 10³），
+        而池化那几档只有池大小那么几条；耗时随之高出一个数量级，还要顺手撞一堆 <code>database is locked</code>。
+        具体毫秒数每台机器都不同（盘、CPU、是否本地库都会改它），别背数字，
+        要背的是那个<b>倍数关系</b>：O(请求数) 次握手 ÷ O(池大小) 次握手 —— 赌输了</td></tr>
 <tr><td>② 小池 + 无限排队</td><td><code>ConnectionPool::acquire</code> 不设超时</td>
     <td>队尾无限延长，谁都不得罪，只是全都慢</td>
     <td>赌"请求总会排到"。过载时等待时间无上限，上游先超时，然后重试，队伍更长 —— 雪崩的标准开场</td></tr>
 <tr><td>③ 小池 + 有界队列 + 超时</td><td><code>acquire(..., timeout)</code> + 队列上限</td>
-    <td>队列满了直接拒；排队超过阈值直接放弃并归还连接</td>
+    <td>队列满了直接拒；排队超过阈值直接放弃，不再占队列位（已经拿到连接的那条照常跑完再归还）</td>
     <td>赌"宁可快速失败，也不要全体慢死"。这是生产环境唯一活下来的写法</td></tr>
 </table>
 
-<h2>师傅的三条硬规则</h2>
+<h2>师傅的四条硬规则</h2>
 <div class="panel">
 <pre># 1. 先算 M* = λ × S。这是稳态下同时"活着"的请求数，也就是连接池的理论最小规模
 #    λ = 45 req/s，S = 30 ms  →  M* = 45 × 0.030 = 1.35 → 池给 2~3 条就够
 #    λ = 120 req/s，S = 90 ms →  M* = 120 × 0.090 = 10.8 → 给 3 条池？那就是策略②的灾难现场
+#    （这条是 Little 定律：稳态下 L = λW，与到达过程是不是泊松无关 —— 所以它好算也好用）
 
 # 2. 池大小不是越大越好。超过 DB 服务器能真正并行处理的量之后，
 #    多出来的连接只在数据库内部排队，你还白白多付一份连接内存和握手时间。
-#    SQLite 更绝：写者只能有一个，池开到 64 条，第 2~64 个写者全在撞 "database is locked"。
+#    PostgreSQL 更狠：一条连接 = 一个后端进程（默认 shared_buffers 摊薄 + 每进程约 10MB），
+#    池开到 200 就是 200 个进程在抢 CPU 和缓冲区，吞吐反而掉。
+#    SQLite 更绝：写者只能有一个，池开到 64 条，第 2~64 个写者全在撞 "database is locked"
+#    （WAL 模式让"读"不再被写挡住，但写者之间依然只有一个，busy_timeout 只是让你多等一会儿）。
 
 # 3. 一定要有超时和上限，并且超时值要小于上游给你的预算。
 #    上游网关 500ms 超时，你排队 600ms 才拿到连接 —— 上游早就断开重试了，
-#    你却还在给一个没人要的请求干活，同时把连接占住。</pre>
+#    你却还在给一个没人要的请求干活，同时把连接占住。
+
+# 4. 池里的连接是会老的，别把它当永久资源。
+#    服务端会单方面关掉空闲连接（MySQL 的 wait_timeout 默认 8 小时、PgBouncer/云代理
+#    常常几分钟），中间层的空闲断连更常见。你这边还留着一条"看起来能用"的连接，
+#    下一次用它就是 broken pipe / MySQL 2006 "MySQL server has gone away"。
+#    所以生产池必须配齐三样：maxLifetime（设得比服务端超时更短）、借出时的有效性检查
+#    （ping / validationQuery）、空闲驱逐。HikariCP 默认 maxLifetime=30 分钟就是在替你做这件事。
+#    注意"检查"本身也要花钱：每条都 ping 一次等于把开销还回来了，所以只借出时查、
+#    或按时间阈值查，别在归还时查。</pre>
 </div>
 
 <div class="foot">本页零外部依赖：所有样式、脚本、图形（SVG）都在这一个文件里，双击即可在浏览器打开。
@@ -215,10 +231,13 @@ function qTimeout(kind) { return kind.timeout === null ? Math.max(2 * CFG.serv, 
 
 function startReq(sim, req, wait) {
   if (sim.kind.pool === 0) {
-    // 无池：等待时间就是建连成本，服务时间 = 建连 + 业务 + 断开(记一半)
+    // 无池：把一次完整握手的成本记在「等待」侧（客户端先感知的就是它），
+    // 业务耗时照常记。断开本身几乎不花时间，真正贵的是下一条连接重新握手；
+    // 但频繁主动断开会把手上的一半套接字留在 TIME_WAIT，高 QPS 下能吃光
+    // 本地临时端口（Linux 默认 32768–60999 约 2.8 万个，Windows 默认 49152–65535 约 1.6 万个）
+    // —— 演示里不画这条，心里要有。
     sim.running.push({ req: req, end: clock + req.dur + CFG.conn, wait: wait, conn: true });
     sim.waitSum += wait + CFG.conn;
-    sim.servedMs += CFG.conn;
     return;
   }
   var free = -1;
@@ -335,6 +354,10 @@ function render() {
 
   sims.forEach(function (sim, i) {
     var k = sim.kind, st = stats[i];
+    // 池占用率 = 所有槽位被占用的毫秒之和 ÷（槽位数 × 已经过的毫秒）。
+    // 这条线冲到 100% 就是「结构性过载」的现场：M* = λS 已经追上池大小了。
+    var util = (k.pool === 0 || clock <= 0) ? null
+      : Math.min(100, 100 * busyMs(sim) / (sim.slots.length * clock));
     var body = k.pool === 0 ? tempBoxes(sim) : slotBoxes(sim);
     var rowsH = body.rows * 44;
     var qy = 40 + rowsH + 16;
@@ -382,6 +405,7 @@ function render() {
             '</div>' +
             '<div class="counts"><span>完成 <b>' + sim.done + '</b></span><span>排队 <b>' + sim.queue.length + '</b></span>' +
             '<span>在跑 <b>' + (k.pool === 0 ? sim.running.length : countBusy(sim)) + '</b></span>' +
+            (util === null ? '' : '<span>池占用 <b style="color:#38bdf8">' + esc(util) + '%</b></span>') +
             '<span>超时 <b style="color:#f87171">' + sim.dropped + '</b></span>' +
             '<span>拒绝 <b style="color:#f87171">' + sim.rejected + '</b></span>' +
             (k.pool === 0 ? '<span>建连 <b style="color:#a78bfa">' + sim.next + '</b> 次</span>' : '') +
@@ -392,15 +416,37 @@ function render() {
   document.getElementById('clk').textContent = esc(clock);
 
   var v = document.getElementById('verdict');
-  if (stats[2].lost + stats[2].dropped > 0 && stats[0].avgW > stats[2].avgW) {
-    v.className = 'hint good';
-    v.innerHTML = '看清了：<b>策略③用 ' + (stats[2].lost) + ' 个失败，换来了活下来那批人的平均等待 ' +
-      esc(stats[2].avgW) + ' ms</b>；而策略②让所有人一起等到 ' + esc(stats[1].avgW) + ' ms。' +
-      '快速失败不是认输，是把有限的连接留给还能按时交付的请求。';
-  } else if (CFG.rate * CFG.serv / 1000 > CFG.pool + 0.5) {
+  var mstar = CFG.rate * CFG.serv / 1000;
+  function utilOf(i) {
+    return (sims[i].slots.length && clock > 0)
+      ? Math.min(100, 100 * busyMs(sims[i]) / (sims[i].slots.length * clock)) : 0;
+  }
+  // ② 和 ③ 用的是同一个池、只差排队策略，所以只要发生甩负荷就把这笔账摊开算
+  var thrTxt = stats[2].thr <= stats[1].thr
+    ? '吞吐 ' + esc(stats[2].thr) + ' req/s，低于 ② 的 ' + esc(stats[1].thr) +
+      ' —— 甩负荷不是免费的。'
+    : '吞吐 ' + esc(stats[2].thr) + ' req/s，这局反而不低于 ② 的 ' + esc(stats[1].thr) +
+      ' —— ③ 把注定要超时的活直接拒了，没为它白占连接。' +
+      '但交付量摆在那儿：③ 完成 ' + sims[2].done + ' 个，② 完成 ' + sims[1].done + ' 个，差额是真丢的活。';
+  var shedTxt = stats[2].lost > 0
+    ? '<br>再看 ③ 交了什么学费：它用 <b>' + stats[2].lost + ' 个失败</b>（排队超时 ' + sims[2].dropped +
+      ' 个、队列满了当场拒 ' + sims[2].rejected + ' 个），把活下来那批的平均等待压到 ' + esc(stats[2].avgW) +
+      ' ms，而 ② 让所有人一起等到 ' + esc(stats[1].avgW) + ' ms。快速失败不是认输，是把有限的连接留给还能按时交付的请求。' +
+      '<br><b style="color:#fbbf24">但 ③ 那个平均值只算了活下来的 ' + sims[2].done + ' 个</b> —— 被甩掉的 ' +
+      stats[2].lost + ' 个一个都不在分母里，这就是幸存者偏差：生产上要同时盯「成功率 + P99 + 平均值」，' +
+      '只看平均值，就会把「甩掉慢请求」一路优化成「甩掉客户」。' +
+      '再对比池占用：② ' + esc(utilOf(1)) + '%、③ ' + esc(utilOf(2)) + '%。③ 低不是因为它高效，' +
+      '是活儿被拒在了门外 —— <b>限流买的是延迟上限，不是容量</b>。' + thrTxt
+    : '';
+  if (mstar > CFG.pool + 0.5) {
     v.className = 'hint bad';
-    v.innerHTML = '现在 λS = <b>' + esc(CFG.rate * CFG.serv / 1000) + '</b> &gt; 池大小 <b>' + CFG.pool +
-      '</b>，系统结构性过载：不管什么策略都救不了，只能<b>加池 / 降 S / 限流</b>三选一。先记住这个数字，比调参数有用。';
+    v.innerHTML = '现在 λS = <b>' + esc(mstar) + '</b> &gt; 池大小 <b>' + CFG.pool +
+      '</b>，系统结构性过载：不管什么策略都救不了，只能<b>加池 / 降 S / 限流</b>三选一。先记住这个数字，比调参数有用。' +
+      shedTxt;
+  } else if (stats[2].lost > 0) {
+    v.className = 'hint good';
+    v.innerHTML = '池按 M* 算是够用的（λS = ' + esc(mstar) + ' ≤ ' + CFG.pool +
+      '），但单请求耗时 S 有抖动，瞬时照样能排起队 —— ' + shedTxt;
   } else {
     v.className = 'hint';
     v.innerHTML = '池够用（M* = ' + esc(CFG.rate * CFG.serv / 1000) + ' ≤ ' + CFG.pool + '），队列基本不堆积。' +
@@ -412,6 +458,17 @@ function countBusy(sim) {
   var n = 0;
   for (var i = 0; i < sim.slots.length; i++) if (sim.slots[i]) n++;
   return n;
+}
+
+/* 截至当前时刻，池里所有连接累计被占用的毫秒数。servedMs 只在请求结束那一刻
+   才累加，跑到一半看会偏低，所以正在跑的那几条按「已经占掉的这部分」现算。 */
+function busyMs(sim) {
+  var t = sim.servedMs;
+  for (var i = 0; i < sim.slots.length; i++) {
+    var s = sim.slots[i];
+    if (s) t += Math.max(0, Math.min(s.req.dur, clock - (s.end - s.req.dur)));
+  }
+  return t;
 }
 
 function bar(label, num, ratio, color) {
@@ -480,6 +537,9 @@ document.getElementById('preset').addEventListener('change', function (e) {
   var p = e.target.value;
   if (!p) return;
   var set = { ok: [3, 45, 30], edge: [3, 100, 30], over: [3, 120, 90] }[p];
+  // 直接给 range 赋值不会触发 input 事件，所以 CFG 必须自己同步 ——
+  // 否则滑块标签跳到新值、仿真却还在跑旧参数，这个下拉就成了摆设。
+  CFG.pool = set[0]; CFG.rate = set[1]; CFG.serv = set[2];
   document.getElementById('pool').value = set[0];
   document.getElementById('rate').value = set[1];
   document.getElementById('serv').value = set[2];

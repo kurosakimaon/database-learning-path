@@ -74,13 +74,22 @@
     background: #1a2236; border-radius: 0 8px 8px 0; font-size: 13px; color: #fde68a;
     min-height: 34px;
   }
+  .explain code {
+    font-family: Consolas, "Courier New", monospace; font-size: 12.5px; color: #a5f3fc;
+    background: #0b1220; border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px;
+  }
   .foot { margin-top: 22px; color: var(--dim); font-size: 13px; line-height: 2; }
   .foot b { color: var(--ink); }
+  .foot code {
+    font-family: Consolas, "Courier New", monospace; font-size: 12.5px; color: #a5f3fc;
+    background: #0b1220; border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px;
+  }
+  .foot .gap { display: block; margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line); }
 </style>
 </head>
 <body>
 <h1>MVCC 版本链实验室 <span class="tag">—— 快照 = 顺着 undo 链往回找第一个"对我可见"的版本</span></h1>
-<p class="sub">左边是一行数据的版本链（每次 UPDATE 压一个新版本，旧版本靠 undo 指针串着）；右边是 T1/T2 的时间线和 read view。先手动点按钮玩，再点「自动播放」看 RC 和 RR 的分水岭。</p>
+<p class="sub">左边是一行数据的版本链（每次 UPDATE 压一个新版本，旧版本靠 undo 指针串着）；右边是 T1/T2 的时间线和 read view。先手动点按钮玩，再点「自动播放」：前六步看 RC 和 RR 的分水岭，最后三步演示「自己的未提交改动永远对自己可见」。</p>
 
 <div class="bar">
   <span class="lab" style="color:var(--dim)">隔离级别</span>
@@ -95,6 +104,8 @@
   <span class="sep"></span>
   <button class="t2" id="b4">T2 开始</button>
   <button class="t2" id="b5">T2 查询</button>
+  <button class="t2" id="b6">T2 更新</button>
+  <button class="t2" id="b7">T2 提交</button>
   <span class="sep"></span>
   <button id="bAuto">▶ 自动播放</button>
   <button id="bReset">重置</button>
@@ -102,7 +113,7 @@
 
 <div class="cols">
   <div class="panel">
-    <h2>版本链（trx_id 藏着掖着，正是它的身份证）</h2>
+    <h2>版本链（每个版本都盖着自己的 trx_id，那就是它的身份证）</h2>
     <div class="chainwrap"><svg id="chain" viewBox="0 0 340 460"></svg></div>
   </div>
   <div>
@@ -111,15 +122,36 @@
       <div class="tlrow"><span class="tlname t1">T1</span><span id="tl1"><span class="ev" style="opacity:.4">（还没开始）</span></span></div>
       <div class="tlrow"><span class="tlname t2">T2</span><span id="tl2"><span class="ev" style="opacity:.4">（还没开始）</span></span></div>
       <div class="viewbox" id="viewbox">T2 还没做过任何查询 —— read view 还没建立。</div>
-      <div class="explain" id="explain">提示：RC 和 RR 的唯一区别是 <b>read view 建立的时机</b> —— RC 每条语句拍一次，RR 事务里第一次读拍一次、钉死用到头。</div>
+      <div class="explain" id="explain">提示：就<b>快照读</b>而言，RC 和 RR 的差别只有一件事 —— <b>read view 建立的时机</b>：
+        RC 每条语句拍一次，RR 事务里第一次读拍一次、钉死用到头。（锁的范围两者也不同，RR 多的是 next-key lock，见页面底部第 ③ 条。）</div>
     </div>
     <div id="log"></div>
     <div class="foot">
       <b>可见性判断三问</b>（顺着版本链从上往下，对每个版本问）：<br>
       ① 是我自己写的吗？→ 可见（所以才读得到自己未提交的修改）；<br>
       ② 写它的事务在我建立 read view 时提交完了吗？→ 可见；<br>
-      ③ 都没中 → 这个版本当我存在，沿 undo 指针往下一个版本接着问。<br>
+      ③ 都没中 → 这个版本当它不存在，沿 undo 指针往下一个版本接着问。<br>
       第一个过了安检的版本，就是查询真正返回的那一行。
+      <span class="gap">
+        <b>动画简化了什么 —— 四条边界，面试被追问就靠这些</b><br>
+        ① 真实 read view 里存的<b>不是提交时间戳</b>，而是 <code>up_limit_id</code>（建视图时最小活跃 trx_id）、
+        <code>low_limit_id</code>（下一个将分配的 trx_id）和当时<b>仍活跃的事务 id 列表</b>；
+        判断靠 trx_id 比大小，不靠「几点提交」。本动画用提交时钟是为了让快照能一眼看懂，
+        结论一样，但别说成「InnoDB 记录提交时间」——它记的是<b>事务 id 的活跃集合</b>。<br>
+        ② 只有<b>快照读</b>（普通 <code>SELECT</code>）才走版本链。<code>SELECT ... FOR UPDATE</code>、
+        <code>... LOCK IN SHARE MODE</code> 以及 <code>UPDATE</code> / <code>DELETE</code> / <code>INSERT</code>
+        都是<b>当前读</b>：直接读最新版本并加锁。<br>
+        ③ 所以 <b>RR 防幻读靠的不是 MVCC，是 next-key lock</b>（记录锁 + 间隙锁）。RC 没有间隙锁，
+        同一条 <code>UPDATE ... WHERE</code> 在两个级别下锁的范围完全不同 ——
+        <b>方向别记反</b>：间隙锁锁住的是"还没有行的那段空隙"，所以范围扫描 + 并发 <code>INSERT</code>
+        在 RR 下最容易互相咬住，线上死锁日志里的高频主角是 RR 的间隙锁；
+        把级别降到 RC（锁范围只剩命中的记录）恰恰是常见的<b>减</b>死锁手段，不是加死锁的理由。<br>
+        ④ 版本链不是永远留着的：只有<b>没有任何 read view 还可能需要它</b>时，purge 线程才能回收旧版本。
+        一个忘了提交的长事务会把整条链钉在原地 —— undo 膨胀、链变长、后来每个查询都多跳几跳。
+        这就是「线上别留长事务、别开 <code>START TRANSACTION</code> 不提交」最直接的机理。
+        顺带一句：同一事务里混用快照读和当前读，「可重复」就破了 —— 当前读会返回你上次快照读里
+        根本不存在的新行，所以 MySQL 的 RR 不等于教科书里的 SERIALIZABLE。
+      </span>
     </div>
   </div>
 </div>
@@ -136,7 +168,10 @@
       versions: [{ trx: 10, commitClock: 9, value: 100, committed: true, who: '建表事务' }],
       t1: null, t2: null,
       t1Seq: 0,
+      t2Seq: 0,
+      t2Done: false,
       t2View: null,                    // RR 用：钉死的 read view
+      lastHit: null,                   // 上一次查询命中的版本对象（不是下标）
       autoTimer: null, autoStep: 0,
       tl1: [], tl2: []
     };
@@ -167,7 +202,8 @@
   function startT1() {
     if (S.t1) return;
     S.clock += 10;
-    S.t1 = { id: S.clock, commitSeq: 0 };
+    S.t1 = { id: S.clock };
+    S.tl1 = [];                 // 提交后 S.t1 置空、按钮可以重新按下去 —— 换一卷新胶带
     log('T1 开始，trx_id = ' + S.t1.id, 't1');
     S.tl1.push('BEGIN');
     explain('T1 出生了，领到身份证号 <b>trx_id=' + S.t1.id + '</b>。之后它写的每个版本都盖这个章。');
@@ -178,33 +214,44 @@
     S.t1Seq += 1;
     var val = 900 + S.t1Seq;           // 901, 902, ...
     var top = S.versions[0];
+    if (!top.committed && top.trx !== S.t1.id) {
+      log('链头是 trx=' + top.trx + ' 的未提交版本 → 真实 InnoDB 里这条 UPDATE 会等它提交或回滚（改同一行必须先拿到 X 锁），动画不模拟等待，直接压在链头上', 'warn');
+    }
     S.versions.unshift({ trx: S.t1.id, commitClock: null, value: val, committed: false, who: 'T1' });
     log('T1 UPDATE v: ' + top.value + ' → ' + val + '（未提交，版本盖 trx_id=' + S.t1.id + '）', 't1');
+    S.tl1.push('UPDATE');
     explain('新版本压到链头，旧版本不删 —— 这就是「<b>写时复制</b>」：改的人只压新副本，看旧数据的人一根毫毛都没动。');
     render();
   }
-  function commitT1() {
-    if (!S.t1) return;
+  function commitTx(which) {
+    var tx = S[which], name = which === 't1' ? 'T1' : 'T2';
+    if (!tx) return;
     var n = 0;
     for (var i = 0; i < S.versions.length; i++) {
-      if (!S.versions[i].committed && S.versions[i].trx === S.t1.id) {
+      if (!S.versions[i].committed && S.versions[i].trx === tx.id) {
         S.versions[i].committed = true;
         S.clock += 1;
         S.versions[i].commitClock = S.clock;
         n++;
       }
     }
-    log('T1 COMMIT：' + n + ' 个版本盖章提交（提交序号 = ' + S.clock + '）', 't1');
-    S.tl1.push('COMMIT');
-    explain('提交不搬数据，只<b>盖一个提交时间戳</b>。从这一刻起，新建立的 read view 就能看见这些版本了 —— 注意「新建立的」四个字。');
-    S.t1 = null;                       // T1 收工
+    log(name + ' COMMIT：' + n + ' 个版本盖章提交（提交序号 = ' + S.clock + '）', which);
+    S[which === 't1' ? 'tl1' : 'tl2'].push('COMMIT');
+    explain('提交不搬数据，只<b>盖一个提交时间戳</b>。从这一刻起，<b>新建立的</b> read view 就能看见这些版本了 —— 注意「新建立的」四个字。');
+    S[which] = null;                     // 该事务收工
+    if (which === 't2') { S.t2View = null; S.t2Done = true; } // 事务结束，钉死的快照一起作废
     render();
   }
+  function commitT1() { commitTx('t1'); }
+  function commitT2() { commitTx('t2'); }
   function startT2() {
     if (S.t2) return;
     S.clock += 10;
     S.t2 = { id: S.clock };
     S.t2View = null;
+    S.t2Done = false;
+    S.tl2 = [];                 // 重开一个事务 = 换一卷新胶带，别把第二个 BEGIN 接到旧卷尾巴上
+    S.lastHit = null;
     log('T2 开始，trx_id = ' + S.t2.id, 't2');
     S.tl2.push('BEGIN');
     explain(S.level === 'RR'
@@ -217,7 +264,7 @@
     var view, note;
     if (S.level === 'RR') {
       if (!S.t2View) { S.t2View = makeView(S.t2.id); note = '第一次读 → <b>建立 read view 并钉死</b>（snap=' + S.t2View.snap + '），本事务用到头'; }
-      else { view = true; note = 'RR：继续用第一次钉死的 read view（snap=' + S.t2View.snap + '），外面提交了我也不看'; }
+      else { note = 'RR：继续用第一次钉死的 read view（snap=' + S.t2View.snap + '），外面提交了我也不看'; }
       view = S.t2View;
     } else {
       view = makeView(S.t2.id);
@@ -230,14 +277,36 @@
       skipped.push(S.versions[i]);
     }
     var v = S.versions[hit];
+    var own = (v.trx === view.self && !v.committed);
+    if (own) log('  ★ 规则①命中：这个版本是 T2 自己写的（trx=' + v.trx + '，还没提交）—— 自己的改动永远可见', 'sys');
     S.tl2.push('SELECT=' + v.value);
     log('T2 查询：跳过 ' + skipped.length + ' 个不可见版本 → 读到 v = ' + v.value + '（trx_id=' + v.trx + ' 写的）', 't2');
     for (var k = 0; k < skipped.length; k++) {
       log('  ✂ 版本 ' + skipped[k].value + '（trx=' + skipped[k].trx + '，' +
-          (skipped[k].committed ? '提交序号' + skipped[k].commitClock + ' > snap' + view.snap : '还没提交') + '）不可见', 'warn');
+          (skipped[k].committed ? '提交序号' + skipped[k].commitClock + ' > snap' + view.snap : '还没提交，也不是我写的') + '）不可见', 'warn');
     }
-    explain(note + '。命中版本 <b>' + v.value + '</b>。' + (skipped.length ? '链头那个版本对它不可见，沿 undo 指针往下找到了这个。' : ''));
-    S.lastHit = hit;
+    explain(note + '。命中版本 <b>' + v.value + '</b>。' + (own
+      ? '链头这个版本 <b>就是 T2 自己写的、还没提交</b> —— 走的是三问的第 ① 条。不给自己看的话，「改完再读」就读不到自己刚写的值，任何语言里的 ORM 第一步就崩了。'
+      : (skipped.length ? '链头那个版本对它不可见，沿 undo 指针往下找到了这个。' : '')));
+    // 存版本对象本身而不是下标：unshift 会把整条链往后挪一格，
+    // 按下标记的「命中」下一次渲染就照到隔壁那个版本上了。
+    S.lastHit = S.versions[hit];
+    render();
+  }
+  function updateT2() {
+    if (!S.t2) { explain('先点「T2 开始」。'); return; }
+    var top = S.versions[0];
+    if (!top.committed && top.trx !== S.t2.id) {
+      log('链头是 trx=' + top.trx + ' 的未提交版本 → 真实 InnoDB 里这条 UPDATE 会等它提交或回滚（改同一行必须先拿到 X 锁），动画不模拟等待，直接压在链头上', 'warn');
+    }
+    S.t2Seq += 1;
+    var val = 800 + S.t2Seq;             // 801, 802, ...
+    S.versions.unshift({ trx: S.t2.id, commitClock: null, value: val, committed: false, who: 'T2' });
+    log('T2 UPDATE v: ' + top.value + ' → ' + val + '（未提交，版本盖 trx_id=' + S.t2.id + '）', 't2');
+    S.tl2.push('UPDATE');
+    explain('<b>UPDATE 是「当前读」，不是快照读</b>：它读的是链头上最新的版本（还要加 X 锁），' +
+            '压根不看你的 read view。所以 RC / RR 在这里毫无区别 —— 也正因为这样，' +
+            '同一个事务里先快照读、再 UPDATE、再快照读，是可能撞见「刚刚还看不见的那一行」的。');
     render();
   }
 
@@ -254,7 +323,7 @@
     for (var i = 0; i < n; i++) {
       var v = S.versions[i];
       var y = 44 + i * 92;
-      var isHit = (S.lastHit === i);
+      var isHit = (S.lastHit === v);
       var stroke = !v.committed ? '#fbbf24' : (isHit ? '#34d399' : '#38bdf8');
       var dash = v.committed ? '' : ' stroke-dasharray="5 4"';
       var glow = isHit ? ' filter="url(#glow)"' : '';
@@ -262,7 +331,7 @@
       out += '<rect x="60" y="' + y + '" width="220" height="62" rx="10" fill="#0b1220" stroke="' + stroke + '" stroke-width="2"' + dash + '/>';
       out += '<text x="76" y="' + (y + 26) + '" fill="#e2e8f0" font-size="18" font-weight="700">v = ' + esc(v.value) + '</text>';
       out += '<text x="76" y="' + (y + 48) + '" fill="#94a3b8" font-size="11">trx_id=' + esc(v.trx) + ' · ' +
-             (v.committed ? ('已提交#' + esc(v.commitClock)) : '未提交（只有 T1 自己可见）') + '</text>';
+             (v.committed ? ('已提交#' + esc(v.commitClock)) : ('未提交（只有 ' + esc(v.who) + ' 自己可见）')) + '</text>';
       if (i === 0) out += '<text x="292" y="' + (y + 20) + '" fill="#f87171" font-size="10">链头</text>';
       out += '</g>';
       if (isHit) out += '<text x="14" y="' + (y + 36) + '" fill="#34d399" font-size="12">◀ T2 命中</text>';
@@ -271,7 +340,6 @@
         out += '<text x="180" y="' + (y + 82) + '" fill="#818cf8" font-size="10">undo 指针</text>';
       }
     }
-    if (!n) out += '';
     svg.innerHTML =
       '<defs><marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">' +
       '<path d="M0,0 L8,4 L0,8 z" fill="#818cf8"/></marker>' +
@@ -293,7 +361,9 @@
 
     // read view 面板
     var vb = $('viewbox');
-    if (!S.t2) vb.innerHTML = 'T2 还没出生，没有 read view。';
+    if (!S.t2) vb.innerHTML = S.t2Done
+      ? 'T2 已经提交收工，read view 随之作废 —— 下一个事务拍到的快照会比它新（链上现在共 ' + S.versions.length + ' 个版本）。'
+      : 'T2 还没出生，没有 read view。';
     else if (S.level === 'RR') {
       vb.innerHTML = S.t2View
         ? '<b>RR read view（钉死）</b>：snap=' + S.t2View.snap + '，self=' + S.t2.id +
@@ -309,6 +379,8 @@
     $('b3').disabled = !S.t1;
     $('b4').disabled = !!S.t2;
     $('b5').disabled = !S.t2;
+    $('b6').disabled = !S.t2;
+    $('b7').disabled = !S.t2;
   }
 
   // ---------- 自动播放 ----------
@@ -318,10 +390,13 @@
     ['T2 开始', startT2, 900],
     ['T2 第一次查询', queryT2, 1700],
     ['T1 提交', commitT1, 1300],
-    ['T2 第二次查询', queryT2, 1700]
+    ['T2 第二次查询', queryT2, 1700],
+    ['T2 更新（当前读）', updateT2, 1500],
+    ['T2 再查一次（读自己未提交的版本）', queryT2, 1900],
+    ['T2 提交', commitT2, 1200]
   ];
   function stopAuto() {
-    if (S.autoTimer) { clearInterval(S.autoTimer); S.autoTimer = null; }
+    if (S.autoTimer) { clearTimeout(S.autoTimer); S.autoTimer = null; }
     $('bAuto').textContent = '▶ 自动播放';
   }
   function tick() {
@@ -329,7 +404,10 @@
       stopAuto();
       explain('自动播放结束。现在是 <b>' + S.level + '</b>：' + (S.level === 'RC'
         ? 'T2 第二次查询读到了 <b>901</b> —— 每条语句重拍快照，T1 的提交“插”进了两次读之间 → <b>不可重复读</b>。'
-        : 'T2 第二次查询还是 <b>100</b> —— read view 钉死在第一次读，T1 提交与我无关 → <b>可重复读</b>。'));
+        : 'T2 第二次查询还是 <b>100</b> —— read view 钉死在第一次读，T1 提交与我无关 → <b>可重复读</b>。') +
+        '<br>最后三步是另一件事：T2 写出的那个 <b>801 在第 8 步那一刻还没提交</b>（第 9 步才盖上提交章），' +
+        '它自己却在第 8 步就立刻读到了 —— 走的是三问的第 ① 条，' +
+        '<b>跟隔离级别无关</b>（RC、RR 都一样）。');
       return;
     }
     var a = AUTO[S.autoStep++];
@@ -347,10 +425,20 @@
 
   // ---------- 级别切换 ----------
   function setLevel(lv) {
+    var hadView = !!(S.t2 && S.t2View);     // T2 已经钉死过一个 read view
+    if (hadView && lv !== S.level) {
+      S.level = lv;                          // reset() 会沿用这个级别重开实验
+      reset();
+      log('T2 已经建立过 read view —— 中途换级别在真实数据库里不存在，实验已重开。', 'warn');
+      explain('真实 InnoDB 里 <code>SET SESSION TRANSACTION ISOLATION LEVEL ...</code> 只管<b>之后新起的事务</b>，' +
+              '正在跑的事务用的还是它建立时那套规则。想看 RC / RR 的分水岭，' +
+              '必须在 <b>T2 做第一次读之前</b>就把级别定好 —— 现在重新点一遍「T1 开始 → T1 更新 → T2 开始 → T2 查询 → T1 提交 → T2 查询」。');
+      return;
+    }
     S.level = lv;
     $('btnRC').className = lv === 'RC' ? 'on' : '';
     $('btnRR').className = lv === 'RR' ? 'on' : '';
-    if (S.t2) S.t2View = null;         // 重来视角：让新级别从头生效
+    if (S.t2) S.t2View = null;         // T2 还没读过：新级别从它第一次读起生效
     log('切换隔离级别 → ' + lv, 'sys');
     explain(lv === 'RC'
       ? '已切到 <b>READ COMMITTED</b>：read view 每条语句拍一次。T1 提交后，T2 下一条 SELECT 就能看到新值。'
@@ -360,10 +448,10 @@
 
   function reset() {
     var lv = S ? S.level : 'RC';
-    if (S && S.autoTimer) clearInterval(S.autoTimer);
+    if (S && S.autoTimer) clearTimeout(S.autoTimer);
     S = fresh();
     S.level = lv;
-    S.lastHit = -1;
+    S.lastHit = null;   // 命中标记存的是版本对象，重置时清空
     $('log').innerHTML = '';
     $('btnRC').className = lv === 'RC' ? 'on' : '';
     $('btnRR').className = lv === 'RR' ? 'on' : '';
@@ -377,6 +465,8 @@
   $('b3').onclick = function () { stopAuto(); commitT1(); };
   $('b4').onclick = function () { stopAuto(); startT2(); };
   $('b5').onclick = function () { stopAuto(); queryT2(); };
+  $('b6').onclick = function () { stopAuto(); updateT2(); };
+  $('b7').onclick = function () { stopAuto(); commitT2(); };
   $('bAuto').onclick = startAuto;
   $('bReset').onclick = function () { stopAuto(); reset(); };
   $('btnRC').onclick = function () { stopAuto(); setLevel('RC'); };

@@ -151,12 +151,15 @@
   </div>
 
   <div class="caveat">
-    <b>口径与 02_lsm_vs_btree.cpp 完全一致：</b>key 形如 <code>user:%07d</code>（10 字节）、value 固定 40B，
-    SST 每条按 <code>key\tvalue\n</code> 记 <b>52B</b>；用户字节 = 每次 put 记 <b>50B</b>（覆盖写也记）；
+    <b>口径与 02_lsm_vs_btree.cpp 完全一致：</b>key 形如 <code>user:%07d</code>（"user:" 5 字节 + 7 位数字 = <b>12 字节</b>）、value 固定 40B，
+    SST 每条按 <code>key\tvalue\n</code> 记 <b>54B</b>（12+1+40+1，与 02 用 <code>file_size</code> 量出来的一致）；
+    用户字节 = 每次 put 记 <b>52B</b>（12+40，即 02 里的 <code>k.size()+v.size()</code>；覆盖写也记）；
     <b>写放大 = 累计落盘字节(flush+compaction 全顺序写) ÷ 用户字节</b>；
     <b>读放大 = 一次查询探测的段数</b>，另记「布隆放行」（真去翻文件）与「真读页数」（真读到数据）。
-    演示缩放：memtable 上限、L1 容量按<b>条数</b>可调（真实 LevelDB：memtable 4096 条、L1=4MB、每层 ×10；
-    因每条恒 52B，按条数与按字节等价）。查询顺序：<b>memtable → 冻结表 → L0 逐段（新在前）→ L1..L3</b>（L1 起先键范围筛，再问布隆）。
+    注意这两本账不是一回事：布隆误判放行的段照样要花一次磁盘 IO 才发现扑空，它记在「布隆放行」里、不记在「真读页数」里 ——
+    「约 3% 误判」不是免费的，只是在<b>查不存在的键</b>时看不见。
+    演示缩放：memtable 上限、L1 容量按<b>条数</b>可调（真实 LevelDB 按字节：write_buffer_size≈4MB、L1≈10MB、每层 ×10；
+    因每条恒 54B，按条数与按字节等价）。查询顺序：<b>memtable → 冻结表 → L0 逐段（新在前）→ L1..L3</b>（L1 起先键范围筛，再问布隆）。
   </div>
 
   <div class="bar">
@@ -221,7 +224,7 @@
    LSM-Tree 教学动画 —— 状态机 + 步骤队列
    口径全部对齐 02_lsm_vs_btree.cpp：
    - put：userBytes += 50；memtable 满 memLimit 条 → 冻结 → flush
-   - flush：整段顺序写 1 个 L0 SSTable（52B/条），插到 L0 最前（查询先撞最新的）
+   - flush：整段顺序写 1 个 L0 SSTable（54B/条），插到 L0 最前（查询先撞最新的）
    - 触发：L0 段数 >= l0Fanout(=4) → L0→L1；L1 条数 > 容量 → L1→L2（每层 ×10，连锁下压）
    - compaction：输入 = src 全段 + dst 范围重叠段；k 路归并（键小先出，同键输入序
      靠前=更新 的先出并保留），旧段报废，输出按 dst 容量切段顺序写
@@ -229,8 +232,8 @@
    - 布隆：每元素 10 bit（至少 64），双哈希 h1/h2
    ===================================================================== */
 
-var BYTES_PER_KV = 52;   // key(10) + '\t'(1) + value(40) + '\n'(1)
-var USER_PER_PUT = 50;   // key(10) + value(40)
+var BYTES_PER_KV = 54;   // key(12) + '\t'(1) + value(40) + '\n'(1)
+var USER_PER_PUT = 52;   // key(12) + value(40)
 
 var S = null;
 var timer = null;
@@ -280,7 +283,7 @@ function capKeys(lv) { // L1=capL1，每层 ×10（条数口径，与 02 的字�
 function capBytes(lv) { return capKeys(lv) * BYTES_PER_KV; }
 function wamp() { return S.putCount ? (S.bytesWritten / (S.putCount * USER_PER_PUT)).toFixed(2) + 'x' : '—'; }
 
-/* ---------- 布隆（双哈希，10 bit/元素，约 1% 误判） ---------- */
+/* ---------- 布隆（双哈希，10 bit/元素，约 3% 误判） ---------- */
 function fnv(s) {
   var h = 0x811c9dc5;
   for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }
@@ -344,7 +347,7 @@ function enqueuePut(k) {
     S.hl = { type: 'mem', cls: 'probe' };
     render();
     explain('写入 <code>' + k + '</code>（v' + S.ver + '）：只进 memtable，<b>零磁盘 IO</b>——LSM 写快就快在这。' +
-      (over ? '这是<b>覆盖写</b>：同 key 新值赢，条数不涨，但用户字节照记 50B。' : '') +
+      (over ? '这是<b>覆盖写</b>：同 key 新值赢，条数不涨，但用户字节照记 ' + USER_PER_PUT + 'B。' : '') +
       ' memtable ' + memCount() + '/' + S.memLimit + ' 条。');
     if (memCount() >= S.memLimit) { pushStep(freezeStep); pushStep(flushStep); pushStep(cascadeStep); }
   });
@@ -370,7 +373,7 @@ function flushStep() {
   S.hl = { type: 'seg', id: seg.id, cls: 'probe' };
   render();
   explain('<b>flush：</b>冻结表本来就有序（skiplist/map 顺序吐出），<b>整段顺序写</b>成 1 个 L0 SSTable：' +
-    seg.count + ' 条 × 52B = ' + fmtB(seg.bytes) + '，插到 L0 最前。' +
+    seg.count + ' 条 × ' + BYTES_PER_KV + 'B = ' + fmtB(seg.bytes) + '，插到 L0 最前。' +
     '累计写放大 = ' + fmtB(S.bytesWritten) + ' ÷ ' + fmtB(S.putCount * USER_PER_PUT) + ' = <b>' + wamp() + '</b>。');
 }
 
@@ -448,7 +451,9 @@ function enqueueCompact(src, dst, forced) {
     render();
     explain('<b>compaction 完成：</b>L' + pack.src + ' → L' + pack.dst + '，重写 <b>' + merged.length + ' 条</b>（' +
       fmtB(merged.length * BYTES_PER_KV) + ' 顺序写；同键新值赢，丢掉 ' + dup + ' 个旧版本），' +
-      dropped + ' 个旧段<b>报废</b>——重写+报废就是<b>写放大的大头</b>。当前写放大 <b>' + wamp() + '</b>。');
+      dropped + ' 个旧段<b>报废</b>——账上只记<b>重写</b>这一笔（那才是真落盘的字节）；' +
+      '报废旧段还的是<b>空间放大</b>的账：旧版本在磁盘上多占了一段，删掉它不花写，占着的位置却已经付过了。' +
+      '当前写放大 <b>' + wamp() + '</b>。');
     pushStep(cascadeStep);   // 连锁反应：下一层被撑爆就继续往下压
   });
 }
@@ -457,6 +462,9 @@ function enqueueCompact(src, dst, forced) {
 function enqueueQuery(k) {
   if (S.q) { explain('上一个查询还在走位，等它结束（或点重置）再查。'); return; }
   pushStep(function () {
+    // 排队期间可能又 flush 出新的 L0 段，也可能已经有一个查询在走位：
+    // 只在"真正开跑这一刻"建上下文，否则第二个查询会把第一个的 S.q 覆盖掉
+    if (S.q) { explain('上一个查询还在走位，等它结束（或点重置）再查。'); return; }
     S.q = { key: k, probes: 0, passed: 0, reads: 0 };
     S.lastQ = null;
     S.hitMark = null;
@@ -555,7 +563,11 @@ function renderMetrics() {
   sh += row('L0（段可重叠）', S.levels[0].length + ' 段（≥' + S.l0Fanout + ' 触发）', S.levels[0].length >= S.l0Fanout ? 'warnv' : '');
   for (var lv = 1; lv <= 3; lv++) {
     var n = levelKeys(lv);
-    sh += row('L' + lv + '（层内不重叠）', S.levels[lv].length + ' 段 · ' + n + ' / ≤' + capKeys(lv) + ' 条', n > capKeys(lv) ? 'warnv' : '');
+    // L3 是最后一层：findTrigger 只查 L1/L2，它超了也不再往下压，
+    // 所以别给它标容量、更别标成警戒色，否则用户会去找一个不存在的合并。
+    sh += lv === 3
+      ? row('L3（层内不重叠）', S.levels[3].length + ' 段 · ' + n + ' 条（最后一层，不再下压）', '')
+      : row('L' + lv + '（层内不重叠）', S.levels[lv].length + ' 段 · ' + n + ' / ≤' + capKeys(lv) + ' 条', n > capKeys(lv) ? 'warnv' : '');
   }
   if (isStalled()) sh += row('<b style="color:#f87171">WRITE STALL</b>', '写入已暂停', 'warnv');
   document.getElementById('mShape').innerHTML = sh;
@@ -616,7 +628,7 @@ function renderScene() {
 
   /* L0..L3 */
   var rowY = [152, 250, 348, 446];
-  var capHint = ['段数 ≥ ' + S.l0Fanout + ' 触发', '≤ ' + capKeys(1) + ' 条（缩放）', '≤ ' + capKeys(2) + ' 条', '≤ ' + capKeys(3) + ' 条'];
+  var capHint = ['段数 ≥ ' + S.l0Fanout + ' 触发', '≤ ' + capKeys(1) + ' 条（缩放）', '≤ ' + capKeys(2) + ' 条', '最后一层，不再下压'];
   for (var lv = 0; lv <= 3; lv++) {
     s += '<text x="12" y="' + (rowY[lv] + 26) + '" class="lvl-label">L' + lv + '</text>' +
          '<text x="12" y="' + (rowY[lv] + 42) + '" class="lvl-sub">' + S.levels[lv].length + ' 段</text>' +
@@ -687,16 +699,16 @@ document.getElementById('btnReset').onclick = function () {
 document.getElementById('selSpeed').onchange = restartTimer;
 document.getElementById('selMem').onchange = function () {
   S.memLimit = parseInt(this.value, 10); render();
-  explain('memLimit 改为 ' + S.memLimit + ' 条（02 演示一用的是 30，真实默认 4096 条）。');
+  explain('memLimit 改为 ' + S.memLimit + ' 条（02 演示一用的是 30，真实默认按字节计，write_buffer_size≈4MB）。');
 };
 document.getElementById('selCap').onchange = function () {
   S.capL1 = parseInt(this.value, 10); render();
-  explain('L1 容量改为 ' + S.capL1 + ' 条，每层 ×10 递增（真实 LevelDB：L1=4MB、每层 ×10）。');
+  explain('L1 容量改为 ' + S.capL1 + ' 条，每层 ×10 递增（真实 LevelDB：L1≈10MB、每层 ×10）。');
 };
 document.getElementById('chkBloom').onchange = function () {
   S.useBloom = this.checked;
   explain(this.checked
-    ? '布隆过滤器<b>开</b>：每元素 10 bit、双哈希（02 的 Bloom 同款），说「肯定没有」就零 IO 跳过，约 1% 误判放行、绝不漏判。'
+    ? '布隆过滤器<b>开</b>：每元素 10 bit、双哈希（02 的 Bloom 同款），说「肯定没有」就零 IO 跳过，约 3% 误判放行、绝不漏判（想逼近理论 1% 需要更多哈希）。'
     : '布隆过滤器<b>关</b>：相当于 02 里 setUseBloom(false)——凡键范围匹配的段都要真去翻文件，查不存在的键会一路翻到底，读放大立刻难看。');
 };
 document.getElementById('chkStall').onchange = function () {
