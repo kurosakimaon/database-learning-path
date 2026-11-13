@@ -40,7 +40,13 @@
 
   function el(tag, attrs, kids) {
     var n = document.createElement(tag);
-    if (attrs) for (var k in attrs) n.setAttribute(k, attrs[k]);
+    if (attrs) for (var k in attrs) {
+      // text 不是 option 的内容属性：写成 attribute 浏览器不认，三个选项全是空的，
+      // 控件就只剩一个下拉箭头。安防根仓那套 LH.el 早把 text 当特殊键走 textContent，
+      // 这里对齐——否则右下角看不出自己选的是哪一档。
+      if (k === "text") n.textContent = attrs[k];
+      else n.setAttribute(k, attrs[k]);
+    }
     if (kids) kids.forEach(function (c) { n.appendChild(c); });
     return n;
   }

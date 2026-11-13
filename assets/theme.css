@@ -8,24 +8,43 @@ html[data-theme="dark"] { color-scheme: dark; }
 html[data-theme="light"] { color-scheme: light; }
 
 .lh-theme-sw {
+  /* 控件的面/墨/线：页面自己给了变量就听页面的（这些变量已被色板 token 接上，会跟档翻），
+     没给就用这里的兜底。兜底原来一律是深底值，浅页上就变成「深胶囊 + 浅字 + 看不见」，
+     所以下面浅档另给一份。 */
+  --sw-face: var(--card, var(--bg-card, #161f26));
+  --sw-line: var(--line, #2b3a45);
+  --sw-ink: var(--dim, var(--fg-dim, #9db0bd));
+  --sw-inset: var(--soft, var(--bg-inset, #101a20));
+  --sw-selink: var(--fg, var(--text, #d8e3ea));
+  --sw-tico: var(--accent, #37c2ff);
   position: fixed; right: 18px; bottom: 18px; z-index: 2147483000;
   display: flex; align-items: center; gap: 7px;
-  background: var(--card, var(--bg-card, #161f26));
-  border: 1px solid var(--line, #2b3a45);
+  background: var(--sw-face);
+  border: 1px solid var(--sw-line);
   border-radius: 999px; padding: 6px 10px;
   box-shadow: 0 6px 24px rgba(0, 0, 0, .24);
   font: 12px var(--font-ui, system-ui, sans-serif);
-  color: var(--dim, var(--fg-dim, #9db0bd));
+  color: var(--sw-ink);
 }
-.lh-theme-sw .tico { font-size: 13px; color: var(--accent, #37c2ff); line-height: 1; }
+.lh-theme-sw .tico { font-size: 13px; color: var(--sw-tico); line-height: 1; }
 .lh-theme-sw select {
   font: 12px var(--font-mono, ui-monospace, monospace);
-  background: var(--soft, var(--bg-inset, #101a20));
-  color: var(--fg, var(--text, #d8e3ea));
-  border: 1px solid var(--line, #2b3a45);
+  background: var(--sw-inset);
+  color: var(--sw-selink);
+  border: 1px solid var(--sw-line);
   border-radius: 7px; padding: 4px 6px; cursor: pointer;
 }
-html[data-theme="light"] .lh-theme-sw { box-shadow: 0 6px 24px rgba(25, 55, 75, .14); }
+/* 浅档兜底：胶囊白面 + 深字（#41545f 在 #ffffff 上 7.90，选项字 #1b2a33 在 #eef3f6 上 13.18，
+   图标 #0a72a5 在 #ffffff 上 5.30，都是 11-12px 小字也够 AA）。 */
+html[data-theme="light"] .lh-theme-sw {
+  --sw-face: var(--card, var(--bg-card, #ffffff));
+  --sw-line: var(--line, #d3dee6);
+  --sw-ink: var(--dim, var(--fg-dim, #41545f));
+  --sw-inset: var(--soft, var(--bg-inset, #eef3f6));
+  --sw-selink: var(--fg, var(--text, #1b2a33));
+  --sw-tico: var(--accent, #0a72a5);
+  box-shadow: 0 6px 24px rgba(25, 55, 75, .14);
+}
 @media print { .lh-theme-sw { display: none; } }
 
 /* 自动生成的语义色板：--lh-<角色>-<色相><明度档>[-a<透明度>][后缀字母]。
