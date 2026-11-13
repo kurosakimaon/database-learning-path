@@ -5,6 +5,12 @@
 
 **马上开始**：用浏览器打开根目录的 [`数据库学习路线图.html`](数据库学习路线图.html)，那是全程地图兼总目录。
 
+## 在线浏览
+
+**[https://kurosakimaon.github.io/database-learning-path/](https://kurosakimaon.github.io/database-learning-path/)**
+
+从在线入口可以直达[数据库学习路线图](https://kurosakimaon.github.io/database-learning-path/%E6%95%B0%E6%8D%AE%E5%BA%93%E5%AD%A6%E4%B9%A0%E8%B7%AF%E7%BA%BF%E5%9B%BE.html)与七关模块页，B+ 树、WAL、MVCC 那些交互动画在线同样能跑。仓库全部离线可用，线上只是省掉 clone。
+
 ## 这门课适合谁
 
 - 会 C++（类、模板、智能指针、多线程 basics），想搞懂数据库内部是怎么回事
