@@ -3,21 +3,22 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>(function(){var d=document.documentElement,p="auto",t;try{p=localStorage.getItem("lh-theme")||"auto";}catch(e){}if(p!=="light"&&p!=="dark")p="auto";try{t=p==="auto"?(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark"):p;}catch(e){t="dark";}d.setAttribute("data-theme",t);d.setAttribute("data-theme-pref",p);})();</script>
 <title>JOIN 交互动画 · 连线演示五种连接</title>
 <style>
   :root {
-    --bg: #0f172a;
-    --surface: #1e293b;
-    --surface-2: #334155;
-    --ink: #f1f5f9;
-    --ink-muted: #94a3b8;
-    --ink-dim: #64748b;
-    --rule: #334155;
-    --accent: #38bdf8;
-    --accent-2: #818cf8;
-    --ok: #4ade80;
-    --warn: #fbbf24;
-    --bad: #f87171;
+    --bg: var(--lh-bg-b2b);
+    --surface: var(--lh-bg-b2c);
+    --surface-2: var(--lh-bg-b3c);
+    --ink: var(--lh-ink-n9b);
+    --ink-muted: var(--lh-ink-b6b);
+    --ink-dim: var(--lh-ink-b5b);
+    --rule: var(--lh-line-b3b);
+    --accent: var(--lh-acc-cb7b);
+    --accent-2: var(--lh-acc-b6b);
+    --ok: var(--lh-acc-g7b);
+    --warn: var(--lh-acc-o7b);
+    --bad: var(--lh-acc-r6b);
     --mono: "Consolas", "Cascadia Mono", "Courier New", ui-monospace, monospace;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -35,7 +36,7 @@
   header { margin-bottom: 18px; }
   header h1 {
     font-size: 1.7rem;
-    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    background: linear-gradient(135deg, var(--lh-bg-cb7b), var(--lh-bg-b6b));
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -43,7 +44,7 @@
   }
   header p { color: var(--ink-muted); font-size: 13px; }
   header .links { margin-top: 8px; font-size: 12px; }
-  header .links a { color: var(--accent); text-decoration: none; margin-right: 14px; }
+  header .links a { color: var(--lh-ink-cb7b); text-decoration: none; margin-right: 14px; }
   header .links a:hover { text-decoration: underline; }
 
   .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
@@ -58,11 +59,11 @@
     cursor: pointer;
     transition: border-color .15s, background .15s, transform .1s;
   }
-  button:hover { border-color: var(--accent); }
+  button:hover { border-color: var(--lh-line-cb7b); }
   button:active { transform: translateY(1px); }
   button.mode.active {
-    background: linear-gradient(135deg, var(--accent), var(--accent-2));
-    color: #0b1220;
+    background: linear-gradient(135deg, var(--lh-bg-cb7b), var(--lh-bg-b6b));
+    color: var(--lh-ink-n1c);
     font-weight: 700;
     border-color: transparent;
   }
@@ -80,7 +81,7 @@
     padding: 8px 12px;
     margin-bottom: 14px;
   }
-  .condition b { color: var(--accent); }
+  .condition b { color: var(--lh-ink-cb7b); }
 
   /* 舞台：左表 + 中间连线 + 右表 */
   .stage {
@@ -99,19 +100,19 @@
   @media (max-width: 860px) { .stage .grid3 { grid-template-columns: 1fr; } }
   .tblbox h3 {
     font-size: 12px;
-    color: var(--accent-2);
+    color: var(--lh-ink-b6c);
     font-family: var(--mono);
     margin-bottom: 6px;
     letter-spacing: .04em;
   }
   table { border-collapse: collapse; width: 100%; font-size: 13px; }
   th, td { padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--rule); white-space: nowrap; }
-  th { color: var(--accent); font-family: var(--mono); font-size: 11.5px; background: #0b1220; }
-  td.num { font-family: var(--mono); color: #a5f3fc; }
-  td.nullv { color: var(--bad); font-style: italic; opacity: .8; }
-  tr.cur-hit   { background: rgba(74, 222, 128, 0.20); }
-  tr.cur-miss  { background: rgba(248, 113, 113, 0.16); }
-  tr.cur-match { background: rgba(56, 189, 248, 0.16); }
+  th { color: var(--lh-ink-cb7b); font-family: var(--mono); font-size: 11.5px; background: var(--lh-bg-n1b); }
+  td.num { font-family: var(--mono); color: var(--lh-ink-tc8b); }
+  td.nullv { color: var(--lh-ink-r6b); font-style: italic; opacity: .8; }
+  tr.cur-hit   { background: var(--lh-bg-g7-a20b); }
+  tr.cur-miss  { background: var(--lh-bg-r6-a16b); }
+  tr.cur-match { background: var(--lh-bg-cb7-a16b); }
   tr.done      { opacity: .55; }
   .badge {
     display: inline-block;
@@ -121,8 +122,8 @@
     margin-left: 6px;
     font-family: var(--mono);
   }
-  .badge.miss { background: rgba(248,113,113,.22); color: var(--bad); }
-  .badge.hit  { background: rgba(74,222,128,.18); color: var(--ok); }
+  .badge.miss { background: var(--lh-bg-r6-a22b); color: var(--lh-ink-r6b); }
+  .badge.hit  { background: var(--lh-bg-g7-a18b); color: var(--lh-ink-g7b); }
 
   svg.wires {
     position: absolute;
@@ -130,29 +131,29 @@
     width: 100%; height: 100%;
     pointer-events: none;
   }
-  .wire        { stroke: rgba(56,189,248,.35); stroke-width: 1.4; fill: none; }
-  .wire.cur    { stroke: var(--ok); stroke-width: 2.2; }
-  .wire.cur-miss { stroke: var(--bad); stroke-width: 2; stroke-dasharray: 5 4; }
-  .wire.cross  { stroke: rgba(129,140,248,.4); stroke-width: 1.2; }
-  .wire.cur-cross { stroke: var(--accent-2); stroke-width: 1.8; }
+  .wire        { stroke: var(--lh-ink-cb7-a35b); stroke-width: 1.4; fill: none; }
+  .wire.cur    { stroke: var(--lh-ink-g7b); stroke-width: 2.2; }
+  .wire.cur-miss { stroke: var(--lh-ink-r6b); stroke-width: 2; stroke-dasharray: 5 4; }
+  .wire.cross  { stroke: var(--lh-ink-b6-a40b); stroke-width: 1.2; }
+  .wire.cur-cross { stroke: var(--lh-ink-b6c); stroke-width: 1.8; }
 
   /* 结果区 */
   .result { margin-top: 18px; }
   .result h2, .explain h2 {
     font-size: 12px;
-    color: var(--accent);
+    color: var(--lh-ink-cb7b);
     text-transform: uppercase;
     letter-spacing: .06em;
     margin-bottom: 8px;
   }
   .result .tablebox { overflow-x: auto; border-radius: 10px; border: 1px solid var(--rule); }
-  tr.fresh { background: rgba(56, 189, 248, 0.14); }
+  tr.fresh { background: var(--lh-bg-cb7-a14b); }
   .empty { padding: 16px; color: var(--ink-dim); text-align: center; }
 
   .explain {
     margin-top: 16px;
-    background: linear-gradient(135deg, rgba(56,189,248,0.10), rgba(129,140,248,0.10));
-    border: 1px solid var(--accent);
+    background: linear-gradient(135deg, var(--lh-bg-cb7-a10b), var(--lh-bg-b6-a10b));
+    border: 1px solid var(--lh-line-cb7b);
     border-left-width: 4px;
     border-radius: 10px;
     padding: 12px 16px;
@@ -160,17 +161,20 @@
     line-height: 1.75;
     min-height: 60px;
   }
-  .explain .lead { color: var(--accent); font-weight: 700; }
+  .explain .lead { color: var(--lh-ink-cb7b); font-weight: 700; }
   .explain code {
     font-family: var(--mono);
-    background: rgba(11,18,32,.7);
+    background: var(--lh-bg-n1-a70b);
     padding: 1px 5px;
     border-radius: 4px;
-    color: #e2e8f0;
+    color: var(--lh-ink-n8b);
   }
   footer { margin-top: 22px; color: var(--ink-dim); font-size: 12px; line-height: 1.8; }
   footer code { font-family: var(--mono); color: var(--ink-muted); }
 </style>
+
+<link rel="stylesheet" href="../assets/theme.css">
+<script src="../assets/theme.js" defer></script>
 </head>
 <body>
 <div class="wrap">
@@ -295,9 +299,9 @@ function deptName(i) { return DEPTS[i].dept_name; }
 function outRow(empIdx, deptIdx) {
   var e = empIdx === null ? null : EMPS[empIdx];
   var d = deptIdx === null ? null : DEPTS[deptIdx];
-  return '<tr><td>' + (e ? esc(e.emp_name) : '<span class="nullv" style="color:#f87171;font-style:italic">NULL</span>') +
+  return '<tr><td>' + (e ? esc(e.emp_name) : '<span class="nullv" style="color:var(--lh-ink-r6b);font-style:italic">NULL</span>') +
          '</td>' + numCell(e ? e.dept_id : null) +
-         '<td>' + (d ? esc(d.dept_name) : '<span class="nullv" style="color:#f87171;font-style:italic">NULL</span>') +
+         '<td>' + (d ? esc(d.dept_name) : '<span class="nullv" style="color:var(--lh-ink-r6b);font-style:italic">NULL</span>') +
          '</td>' + numCell(d ? d.floor_no : null) + "</tr>";
 }
 

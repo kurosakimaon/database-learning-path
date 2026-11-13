@@ -3,21 +3,22 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>(function(){var d=document.documentElement,p="auto",t;try{p=localStorage.getItem("lh-theme")||"auto";}catch(e){}if(p!=="light"&&p!=="dark")p="auto";try{t=p==="auto"?(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark"):p;}catch(e){t="dark";}d.setAttribute("data-theme",t);d.setAttribute("data-theme-pref",p);})();</script>
 <title>第 1 关 · 筑基期：关系模型与 SQL — 数据库学习路线</title>
 <style>
   :root {
-    --bg: #0f172a;
-    --surface: #1e293b;
-    --surface-2: #334155;
-    --ink: #f1f5f9;
-    --ink-muted: #94a3b8;
-    --ink-dim: #64748b;
-    --rule: #334155;
-    --accent: #38bdf8;
-    --accent-2: #818cf8;
-    --ok: #4ade80;
-    --warn: #fbbf24;
-    --bad: #f87171;
+    --bg: var(--lh-bg-b2b);
+    --surface: var(--lh-bg-b2c);
+    --surface-2: var(--lh-bg-b3c);
+    --ink: var(--lh-ink-n9b);
+    --ink-muted: var(--lh-ink-b6b);
+    --ink-dim: var(--lh-ink-b5b);
+    --rule: var(--lh-line-b3b);
+    --accent: var(--lh-acc-cb7b);
+    --accent-2: var(--lh-acc-b6b);
+    --ok: var(--lh-acc-g7b);
+    --warn: var(--lh-acc-o7b);
+    --bad: var(--lh-acc-r6b);
     --mono: "Consolas", "Cascadia Mono", "Courier New", ui-monospace, monospace;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -37,15 +38,15 @@
     display: inline-block;
     font-size: 12px;
     letter-spacing: .12em;
-    color: var(--accent);
-    border: 1px solid var(--accent);
+    color: var(--lh-ink-cb7b);
+    border: 1px solid var(--lh-line-cb7b);
     border-radius: 999px;
     padding: 3px 14px;
     margin-bottom: 14px;
   }
   .header h1 {
     font-size: 2rem;
-    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    background: linear-gradient(135deg, var(--lh-bg-cb7b), var(--lh-bg-b6b));
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -62,7 +63,7 @@
   }
   .panel h2 {
     font-size: 16px;
-    color: var(--accent);
+    color: var(--lh-ink-cb7b);
     margin-bottom: 12px;
     display: flex;
     align-items: center;
@@ -72,9 +73,9 @@
 
   .why { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 12px; }
   .why > div {
-    background: rgba(56,189,248,.06);
+    background: var(--lh-bg-cb7-a6b);
     border: 1px solid var(--rule);
-    border-left: 3px solid var(--accent-2);
+    border-left: 3px solid var(--lh-line-b6b);
     border-radius: 9px;
     padding: 12px 14px;
     font-size: 13px;
@@ -98,12 +99,12 @@
   .card::before {
     content: '';
     position: absolute; top: 0; left: 0; right: 0; height: 3px;
-    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    background: linear-gradient(90deg, var(--lh-bg-cb7b), var(--lh-bg-b6b));
   }
   .card:hover {
     transform: translateY(-4px);
-    border-color: var(--accent);
-    box-shadow: 0 12px 32px rgba(2, 6, 23, .6);
+    border-color: var(--lh-line-cb7b);
+    box-shadow: 0 12px 32px var(--lh-shd-n1-a60b);
   }
   .card .no {
     font-family: var(--mono);
@@ -112,7 +113,7 @@
     margin-bottom: 6px;
   }
   .card .title { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
-  .card .title code { font-family: var(--mono); color: var(--accent); font-size: 15px; }
+  .card .title code { font-family: var(--mono); color: var(--lh-ink-cb7b); font-size: 15px; }
   .card .desc { font-size: 12.5px; color: var(--ink-muted); line-height: 1.65; min-height: 60px; }
   .card .tags { margin-top: 12px; display: flex; gap: 7px; flex-wrap: wrap; }
   .tag {
@@ -122,9 +123,9 @@
     background: var(--surface-2);
     color: var(--ink-muted);
   }
-  .tag.star { background: rgba(56,189,248,.16); color: var(--accent); }
-  .tag.tool { background: rgba(129,140,248,.16); color: var(--accent-2); }
-  .tag.live { background: rgba(74,222,128,.14); color: var(--ok); }
+  .tag.star { background: var(--lh-bg-cb7-a16b); color: var(--lh-ink-cb7b); }
+  .tag.tool { background: var(--lh-bg-b6-a16b); color: var(--lh-ink-b6c); }
+  .tag.live { background: var(--lh-bg-g7-a14b); color: var(--lh-ink-g7b); }
 
   .order { counter-reset: st; margin-top: 10px; }
   .order li {
@@ -142,17 +143,17 @@
     position: absolute; left: 6px; top: 10px;
     width: 26px; height: 26px;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--accent), var(--accent-2));
-    color: #0b1220;
+    background: linear-gradient(135deg, var(--lh-bg-cb7b), var(--lh-bg-b6b));
+    color: var(--lh-ink-n1c);
     font-weight: 700;
     font-size: 13px;
     display: flex; align-items: center; justify-content: center;
   }
-  .order code { font-family: var(--mono); color: var(--accent); }
+  .order code { font-family: var(--mono); color: var(--lh-ink-cb7b); }
   .order b { color: var(--ink); }
 
   pre.cmd {
-    background: #0b1220;
+    background: var(--lh-bg-n1b);
     border: 1px solid var(--rule);
     border-radius: 9px;
     padding: 13px 16px;
@@ -163,18 +164,21 @@
     margin-top: 10px;
   }
   pre.cmd .c { color: var(--ink-dim); }
-  pre.cmd .k { color: var(--accent); }
-  pre.cmd .w { color: var(--warn); }
+  pre.cmd .k { color: var(--lh-ink-cb7b); }
+  pre.cmd .w { color: var(--lh-ink-o7b); }
   .note {
     margin-top: 12px; padding: 10px 14px;
-    border-left: 3px solid var(--warn);
-    background: rgba(251,191,36,.07);
+    border-left: 3px solid var(--lh-line-o7b);
+    background: var(--lh-bg-o7-a7b);
     border-radius: 0 8px 8px 0;
     font-size: 12.5px;
     color: var(--ink-muted);
   }
-  .note b { color: var(--warn); }
+  .note b { color: var(--lh-ink-o7b); }
 </style>
+
+<link rel="stylesheet" href="../assets/theme.css">
+<script src="../assets/theme.js" defer></script>
 </head>
 <body>
 <div class="container">
@@ -217,7 +221,7 @@
       <a class="card" href="02_schema_design.sql">
         <div class="no">STEP 02 · 设计</div>
         <div class="title"><code>02_schema_design.sql</code></div>
-        <div class="desc">六种约束、一对多 / 一对一 / 多对多、一张大宽表从 1NF 拆到 3NF、什么时候故意反范式。含一条<b style="color:var(--warn)">故意失败</b>的外键插入，让你亲眼看报错。</div>
+        <div class="desc">六种约束、一对多 / 一对一 / 多对多、一张大宽表从 1NF 拆到 3NF、什么时候故意反范式。含一条<b style="color:var(--lh-ink-o7b)">故意失败</b>的外键插入，让你亲眼看报错。</div>
         <div class="tags"><span class="tag star">★ 核心</span><span class="tag">三范式</span></div>
       </a>
       <a class="card" href="03_sql_cpp.cpp">
@@ -275,14 +279,14 @@ sqlite&gt; <span class="k">.quit</span>
 <span class="k">.\03_sql_cpp.exe</span></pre>
     <div class="note">
       <b>开工前记住第一条军规：</b>SQLite 的外键约束<b>默认是关闭的</b>。每个新连接（每个 sqlite3 会话、每个 C++ 连接）都要先执行
-      <code style="font-family:var(--mono);color:var(--accent)">PRAGMA foreign_keys = ON;</code>，
+      <code style="font-family:var(--mono);color:var(--lh-ink-cb7b)">PRAGMA foreign_keys = ON;</code>，
       否则脏数据照样塞进去，还不报错——这是 SQLite 的"特性"，不是你的错。
     </div>
   </div>
 
   <div style="margin-top:34px;padding-top:14px;border-top:1px solid var(--line);color:var(--ink-dim);font-size:.85rem;text-align:center">
-    第 1 关 · 筑基期 · 关系模型与 SQL ｜ 下一关：<a href="../storage_index/index.html" style="color:var(--accent)">第 2 关 · 炼气期（存储与索引）</a> ｜
-    <a href="../数据库学习路线图.html" style="color:var(--accent)">返回总路线图</a>
+    第 1 关 · 筑基期 · 关系模型与 SQL ｜ 下一关：<a href="../storage_index/index.html" style="color:var(--lh-ink-cb7b)">第 2 关 · 炼气期（存储与索引）</a> ｜
+    <a href="../数据库学习路线图.html" style="color:var(--lh-ink-cb7b)">返回总路线图</a>
   </div>
 
 </div>

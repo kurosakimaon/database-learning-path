@@ -3,20 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>(function(){var d=document.documentElement,p="auto",t;try{p=localStorage.getItem("lh-theme")||"auto";}catch(e){}if(p!=="light"&&p!=="dark")p="auto";try{t=p==="auto"?(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark"):p;}catch(e){t="dark";}d.setAttribute("data-theme",t);d.setAttribute("data-theme-pref",p);})();</script>
 <title>第 7 关 · 手搓期 · MiniDB —— 用 C++ 手搓迷你数据库</title>
 <style>
   :root {
-    --bg: #0f172a;
-    --bg-soft: #131c33;
-    --card: #1e293b;
-    --card-hover: #233046;
-    --line: #2c3b57;
-    --text: #e2e8f0;
-    --muted: #94a3b8;
-    --accent: #38bdf8;
-    --accent2: #818cf8;
-    --ok: #34d399;
-    --code-bg: #0b1220;
+    --bg: var(--lh-bg-b2b);
+    --bg-soft: var(--lh-bg-b2e);
+    --card: var(--lh-bg-b2c);
+    --card-hover: var(--lh-bg-b3d);
+    --line: var(--lh-line-b3c);
+    --text: var(--lh-ink-n8b);
+    --muted: var(--lh-ink-b6b);
+    --accent: var(--lh-acc-cb7b);
+    --accent2: var(--lh-acc-b6b);
+    --ok: var(--lh-acc-tg7b);
+    --code-bg: var(--lh-bg-n1b);
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -30,19 +31,19 @@
   header { text-align: center; padding: 48px 0 8px; }
   header h1 {
     font-size: 2.4rem; letter-spacing: 2px;
-    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    background: linear-gradient(90deg, var(--lh-bg-cb7b), var(--lh-bg-b6b));
     -webkit-background-clip: text; background-clip: text; color: transparent;
   }
   header p.sub { color: var(--muted); margin-top: 10px; font-size: 1.02rem; }
   header .rule {
     display: inline-block; margin-top: 18px; padding: 6px 18px;
     border: 1px solid var(--line); border-radius: 999px;
-    color: var(--accent); font-size: .86rem; background: var(--bg-soft);
+    color: var(--lh-ink-cb7b); font-size: .86rem; background: var(--bg-soft);
   }
 
   h2.sec {
-    margin: 54px 0 18px; font-size: 1.35rem; color: var(--accent);
-    border-left: 4px solid var(--accent2); padding-left: 12px;
+    margin: 54px 0 18px; font-size: 1.35rem; color: var(--lh-ink-cb7b);
+    border-left: 4px solid var(--lh-line-b6b); padding-left: 12px;
   }
   p.note { color: var(--muted); font-size: .92rem; margin-bottom: 16px; }
 
@@ -59,38 +60,41 @@
     background: var(--card); border: 1px solid var(--line); border-radius: 14px;
     padding: 20px 22px; transition: transform .15s ease, border-color .15s ease, background .15s ease;
   }
-  .card:hover { transform: translateY(-3px); border-color: var(--accent); background: var(--card-hover); }
+  .card:hover { transform: translateY(-3px); border-color: var(--lh-line-cb7b); background: var(--card-hover); }
   .card .tag {
-    display: inline-block; font-size: .74rem; color: #0b1220; font-weight: 700;
-    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    display: inline-block; font-size: .74rem; color: var(--lh-ink-n1c); font-weight: 700;
+    background: linear-gradient(90deg, var(--lh-bg-cb7b), var(--lh-bg-b6b));
     border-radius: 6px; padding: 2px 10px; letter-spacing: 1px;
   }
   .card h3 { margin: 10px 0 6px; font-size: 1.12rem; }
   .card p.desc { color: var(--muted); font-size: .9rem; min-height: 3.4em; }
   .card ul { list-style: none; margin-top: 10px; font-size: .88rem; }
   .card li { margin: 5px 0; padding-left: 1.35em; position: relative; }
-  .card li.k::before { content: "◆"; position: absolute; left: 0; color: var(--accent2); font-size: .72em; top: .35em; }
-  .card li.f::before { content: "▸"; position: absolute; left: 0; color: var(--accent); }
-  .card code { color: var(--ok); font-family: Consolas, "Courier New", monospace; font-size: .86em; }
+  .card li.k::before { content: "◆"; position: absolute; left: 0; color: var(--lh-ink-b6c); font-size: .72em; top: .35em; }
+  .card li.f::before { content: "▸"; position: absolute; left: 0; color: var(--lh-ink-cb7b); }
+  .card code { color: var(--lh-ink-tg7b); font-family: Consolas, "Courier New", monospace; font-size: .86em; }
 
   /* ---------- 命令速查 ---------- */
   .cmds { background: var(--code-bg); border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; }
   .cmds pre {
     font-family: Consolas, "Courier New", monospace; font-size: .92rem;
-    color: #d7e2f4; overflow-x: auto; padding: 10px 0;
+    color: var(--lh-ink-b8b); overflow-x: auto; padding: 10px 0;
   }
-  .cmds .c { color: #64748b; }
-  .cmds .p { color: var(--accent); }
-  .cmds .f2 { color: var(--ok); }
+  .cmds .c { color: var(--lh-ink-b5b); }
+  .cmds .p { color: var(--lh-ink-cb7b); }
+  .cmds .f2 { color: var(--lh-ink-tg7b); }
   .tips { margin-top: 14px; color: var(--muted); font-size: .88rem; }
-  .tips b { color: var(--accent); }
+  .tips b { color: var(--lh-ink-cb7b); }
 
   footer {
     margin-top: 60px; text-align: center; color: var(--muted); font-size: .85rem;
     border-top: 1px dashed var(--line); padding-top: 22px;
   }
-  footer .master { color: var(--accent2); }
+  footer .master { color: var(--lh-ink-b6c); }
 </style>
+
+<link rel="stylesheet" href="../assets/theme.css">
+<script src="../assets/theme.js" defer></script>
 </head>
 <body>
 <div class="wrap">

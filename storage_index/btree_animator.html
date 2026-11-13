@@ -3,18 +3,19 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script>(function(){var d=document.documentElement,p="auto",t;try{p=localStorage.getItem("lh-theme")||"auto";}catch(e){}if(p!=="light"&&p!=="dark")p="auto";try{t=p==="auto"?(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark"):p;}catch(e){t="dark";}d.setAttribute("data-theme",t);d.setAttribute("data-theme-pref",p);})();</script>
 <title>B+ 树插入与查找动画 · 阶 = 4</title>
 <style>
   :root{
-    --bg:#0f172a; --bg2:#0b1220; --panel:#111c33; --line:#1e293b;
-    --cy:#38bdf8; --vi:#818cf8; --tx:#e2e8f0; --mu:#94a3b8;
-    --hot:#fbbf24; --ok:#34d399; --bad:#fb7185;
+    --bg:var(--lh-bg-b2b); --bg2:var(--lh-bg-n1b); --panel:var(--lh-bg-b2h); --line:var(--lh-line-b2c);
+    --cy:var(--lh-acc-cb7b); --vi:var(--lh-ink-b6c); --tx:var(--lh-ink-n8b); --mu:var(--lh-ink-b6b);
+    --hot:var(--lh-ink-o7b); --ok:var(--lh-acc-tg7b); --bad:var(--lh-acc-r6c);
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--tx);
        font:14px/1.65 "Segoe UI","Microsoft YaHei",Consolas,monospace;}
   header{padding:18px 24px 10px;border-bottom:1px solid var(--line);background:var(--bg2)}
-  h1{margin:0 0 4px;font-size:19px;color:var(--cy)}
+  h1{margin:0 0 4px;font-size:19px;color:var(--lh-ink-cb7b)}
   h1 small{color:var(--mu);font-weight:400;font-size:13px;margin-left:10px}
   .sub{color:var(--mu);font-size:12.5px}
   .wrap{display:flex;gap:14px;padding:14px 18px;align-items:flex-start;flex-wrap:wrap}
@@ -22,51 +23,54 @@
          border:1px solid var(--line);border-radius:10px;overflow:hidden}
   .side{flex:0 0 320px;display:flex;flex-direction:column;gap:12px}
   .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;
-       padding:12px;border-bottom:1px solid var(--line);background:#0d1729}
-  input[type=text]{width:96px;padding:7px 9px;background:#0b1220;color:var(--tx);
-       border:1px solid #24344f;border-radius:6px;font-family:inherit;font-size:14px}
-  input[type=text]:focus{outline:none;border-color:var(--cy)}
-  button{padding:7px 13px;background:#16233c;color:var(--tx);border:1px solid #2b3d5e;
+       padding:12px;border-bottom:1px solid var(--line);background:var(--lh-bg-b2k)}
+  input[type=text]{width:96px;padding:7px 9px;background:var(--lh-bg-n1b);color:var(--tx);
+       border:1px solid var(--lh-line-b3e);border-radius:6px;font-family:inherit;font-size:14px}
+  input[type=text]:focus{outline:none;border-color:var(--lh-line-cb7b)}
+  button{padding:7px 13px;background:var(--lh-bg-b2g);color:var(--tx);border:1px solid var(--lh-line-b3f);
          border-radius:6px;cursor:pointer;font-family:inherit;font-size:13px;
          transition:transform .12s ease,background .15s ease,border-color .15s ease}
-  button:hover{background:#1d2e4d;border-color:var(--cy)}
+  button:hover{background:var(--lh-bg-b3f);border-color:var(--lh-line-cb7b)}
   button:active{transform:translateY(1px) scale(.98)}
-  button.primary{background:#0c3a52;border-color:var(--cy);color:#cfefff}
-  button.warn{border-color:#6b4a12;color:#fde3a7}
-  select{padding:6px 8px;background:#0b1220;color:var(--tx);
-         border:1px solid #24344f;border-radius:6px;font-family:inherit}
+  button.primary{background:var(--lh-bg-cb3c);border-color:var(--lh-line-cb7b);color:var(--lh-ink-cb8d)}
+  button.warn{border-color:var(--lh-line-o4b);color:var(--lh-ink-o8c)}
+  select{padding:6px 8px;background:var(--lh-bg-n1b);color:var(--tx);
+         border:1px solid var(--lh-line-b3e);border-radius:6px;font-family:inherit}
   svg{display:block;width:100%;height:430px;background:
-      radial-gradient(circle at 20% 0%,#122036 0%,#0b1220 60%)}
+      radial-gradient(circle at 20% 0%,var(--lh-bg-b2l) 0%,var(--lh-bg-n1b) 60%)}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
   .card h3{margin:0 0 8px;font-size:13px;color:var(--vi);letter-spacing:.5px}
   .stat{display:flex;justify-content:space-between;align-items:baseline;
-        padding:5px 0;border-bottom:1px dashed #1c2a44}
+        padding:5px 0;border-bottom:1px dashed var(--lh-line-b2d)}
   .stat:last-child{border-bottom:none}
-  .stat b{font-size:22px;color:var(--cy);font-variant-numeric:tabular-nums}
+  .stat b{font-size:22px;color:var(--lh-ink-cb7b);font-variant-numeric:tabular-nums}
   .stat.v b{color:var(--vi)}
   .stat i{font-style:normal;color:var(--mu);font-size:12px}
-  #say{min-height:96px;font-size:13px;color:#dbe7f8}
+  #say{min-height:96px;font-size:13px;color:var(--lh-ink-b8c)}
   #say em{font-style:normal;color:var(--hot)}
-  #say s{text-decoration:none;color:var(--ok)}
+  #say s{text-decoration:none;color:var(--lh-ink-tg7b)}
   #log{max-height:150px;overflow:auto;font-size:11.5px;color:var(--mu);
-       line-height:1.55;background:#0a1120;border-radius:6px;padding:8px 10px}
-  #log div{border-bottom:1px dotted #16233c;padding:2px 0}
-  #log .dup,#say .dup{color:#fb7185}
-  code{background:#0b1220;border:1px solid #24344f;border-radius:4px;padding:0 5px;
-       font-family:Consolas,monospace;font-size:11.5px;color:#a5f3fc}
+       line-height:1.55;background:var(--lh-bg-b1c);border-radius:6px;padding:8px 10px}
+  #log div{border-bottom:1px dotted var(--lh-line-b2e);padding:2px 0}
+  #log .dup,#say .dup{color:var(--lh-ink-r6c)}
+  code{background:var(--lh-bg-n1b);border:1px solid var(--lh-line-b3e);border-radius:4px;padding:0 5px;
+       font-family:Consolas,monospace;font-size:11.5px;color:var(--lh-ink-tc8b)}
   .legend{font-size:11.5px;color:var(--mu);padding:8px 12px;border-top:1px solid var(--line)}
   .k{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 4px 0 10px;vertical-align:middle}
   /* ---- 分裂动画：节点用 transform 出生，被提升的 key 用 transition 飞一下 ---- */
   .node{transition:transform .42s cubic-bezier(.2,.9,.25,1),opacity .3s ease}
   .node.spawn{transform:scale(.2);opacity:0}
-  .cell.hot{fill:#3a2a06!important;stroke:var(--hot)!important}
-  .cell.promote{fill:#0f3a2b!important;stroke:var(--ok)!important}
+  .cell.hot{fill:var(--lh-bg-o2b)!important;stroke:var(--hot)!important}
+  .cell.promote{fill:var(--lh-bg-tg3b)!important;stroke:var(--lh-ink-tg7b)!important}
   .path{stroke:var(--hot)!important;stroke-width:2.4!important;opacity:1!important}
   .tag{transition:opacity .3s ease}
-  @keyframes pulse{0%,100%{filter:drop-shadow(0 0 0 rgba(251,191,36,0))}
-                   50%{filter:drop-shadow(0 0 9px rgba(251,191,36,.85))}}
+  @keyframes pulse{0%,100%{filter:drop-shadow(0 0 0 var(--lh-shd-o7-a0b))}
+                   50%{filter:drop-shadow(0 0 9px var(--lh-shd-o7-a85b))}}
   .glow{animation:pulse .85s ease-in-out 2}
 </style>
+
+<link rel="stylesheet" href="../assets/theme.css">
+<script src="../assets/theme.js" defer></script>
 </head>
 <body>
 <header>
@@ -101,10 +105,10 @@
     </div>
     <svg id="svg" viewBox="0 0 900 430" preserveAspectRatio="xMidYMid meet"></svg>
     <div class="legend">
-      <span class="k" style="background:#818cf8"></span>内部节点（只存路标，不存数据）
-      <span class="k" style="background:#38bdf8"></span>叶子节点（数据全在这儿）
-      <span class="k" style="background:#fbbf24"></span>正在比较的路径
-      <span class="k" style="background:#34d399"></span>刚上提的 key
+      <span class="k" style="background:var(--lh-bg-b6b)"></span>内部节点（只存路标，不存数据）
+      <span class="k" style="background:var(--lh-bg-cb7b)"></span>叶子节点（数据全在这儿）
+      <span class="k" style="background:var(--lh-bg-o7b)"></span>正在比较的路径
+      <span class="k" style="background:var(--lh-bg-tg7b)"></span>刚上提的 key
       &nbsp;|&nbsp; 叶子之间的虚线箭头 = 叶子链表（范围扫描靠它）
     </div>
   </div>

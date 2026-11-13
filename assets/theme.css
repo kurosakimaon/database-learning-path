@@ -1,0 +1,102 @@
+/* ===== 主题控件（通用部分，各仓库原样复用；下面的调色板覆盖表才因仓库而异） =====
+   控件挂在右下角，避开页面抬头与底部翻页条；打印时不出现。
+   变量取的是各仓库自己的命名，取不到就退回中性值，保证缺 CSS 也能用。 */
+/* 未设档时两种都声明（脚本被拦时表单控件也不会在浅页上发黑）；
+   设了档就按档走，这一段所有仓库通用。 */
+html { color-scheme: dark light; }
+html[data-theme="dark"] { color-scheme: dark; }
+html[data-theme="light"] { color-scheme: light; }
+
+.lh-theme-sw {
+  position: fixed; right: 18px; bottom: 18px; z-index: 2147483000;
+  display: flex; align-items: center; gap: 7px;
+  background: var(--card, var(--bg-card, #161f26));
+  border: 1px solid var(--line, #2b3a45);
+  border-radius: 999px; padding: 6px 10px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .24);
+  font: 12px var(--font-ui, system-ui, sans-serif);
+  color: var(--dim, var(--fg-dim, #9db0bd));
+}
+.lh-theme-sw .tico { font-size: 13px; color: var(--accent, #37c2ff); line-height: 1; }
+.lh-theme-sw select {
+  font: 12px var(--font-mono, ui-monospace, monospace);
+  background: var(--soft, var(--bg-inset, #101a20));
+  color: var(--fg, var(--text, #d8e3ea));
+  border: 1px solid var(--line, #2b3a45);
+  border-radius: 7px; padding: 4px 6px; cursor: pointer;
+}
+html[data-theme="light"] .lh-theme-sw { box-shadow: 0 6px 24px rgba(25, 55, 75, .14); }
+@media print { .lh-theme-sw { display: none; } }
+
+/* 自动生成的语义色板：--lh-<角色>-<色相><明度档>[-a<透明度>][后缀字母]。
+   角色 bg=面 / ink=墨 / line=线 / shd=影；色相 n=中性，其余按 16 个色相桶；
+   数字是明度档（1 最暗 -> 9 最亮，按 CIE L* 分），同一档位里的近似色用
+   b、c、d 后缀分开——分开是为了默认外观逐像素不变，想收敛配色时把
+   同档的几条并成一条即可。
+   仓库里深浅页混着写（--file-base）时，角色后面还会带一个 l/d，点明这条
+   token 的原稿是哪一档：同一支白字在深底页和浅底页里的换档推法不同，
+   不分开就会有一侧借用另一侧的推导值。
+
+   :root 是无脚本/未设主题时的兜底，取的就是原色，所以页面默认外观不变。
+   另两档按角色换档推导：色相保住、饱和压住，红=报警、绿=通过这类语义色
+   只挪明度不反相，淡染层和反差带上的颜色两边原样保留——图解不会因为换
+   主题而讲错东西。 */
+:root{--lh-acc-b6b:#818cf8;--lh-acc-cb5b:#0a72a5;--lh-acc-cb7b:#38bdf8;--lh-acc-cb7c:#37c2ff;--lh-acc-g7b:#4ade80;--lh-acc-o5b:#8a6100;--lh-acc-o7b:#fbbf24;--lh-acc-o8b:#ffcf5c;--lh-acc-r6b:#f87171;--lh-acc-r6c:#fb7185;--lh-acc-tg7b:#34d399;--lh-bg-b1b:#0a1122;--lh-bg-b1c:#0a1120;--lh-bg-b2-a50b:rgba(15, 23, 42, 0.5);--lh-bg-b2b:#0f172a;--lh-bg-b2c:#1e293b;--lh-bg-b2d:#111827;--lh-bg-b2e:#131c33;--lh-bg-b2f:#1a2236;--lh-bg-b2g:#16233c;--lh-bg-b2h:#111c33;--lh-bg-b2i:#0b1426;--lh-bg-b2j:#12233f;--lh-bg-b2k:#0d1729;--lh-bg-b2l:#122036;--lh-bg-b2m:#0d1a2e;--lh-bg-b2n:#122240;--lh-bg-b2o:#16223a;--lh-bg-b2p:#131b2e;--lh-bg-b3b:#25334a;--lh-bg-b3c:#334155;--lh-bg-b3d:#233046;--lh-bg-b3e:#24344d;--lh-bg-b3f:#1d2e4d;--lh-bg-b4b:#3d4c63;--lh-bg-b5b:#64748b;--lh-bg-b6-a10b:rgba(129, 140, 248, 0.1);--lh-bg-b6-a15b:rgba(129, 140, 248, 0.15);--lh-bg-b6-a16b:rgba(129, 140, 248, 0.16);--lh-bg-b6-a5b:rgba(148, 163, 184, 0.05);--lh-bg-b6-a7b:rgba(129, 140, 248, 0.07);--lh-bg-b6-a8b:rgba(129, 140, 248, 0.08);--lh-bg-b6b:#818cf8;--lh-bg-cb2b:#0f2436;--lh-bg-cb2c:#0c2b3a;--lh-bg-cb2d:#0c2233;--lh-bg-cb3b:#164e63;--lh-bg-cb3c:#0c3a52;--lh-bg-cb7-a10b:rgba(56, 189, 248, 0.1);--lh-bg-cb7-a12b:rgba(56, 189, 248, 0.12);--lh-bg-cb7-a14b:rgba(56, 189, 248, 0.14);--lh-bg-cb7-a15b:rgba(56, 189, 248, 0.15);--lh-bg-cb7-a16b:rgba(56, 189, 248, 0.16);--lh-bg-cb7-a6b:rgba(56, 189, 248, 0.06);--lh-bg-cb7-a7b:rgba(56, 189, 248, 0.07);--lh-bg-cb7b:#38bdf8;--lh-bg-g7-a14b:rgba(74, 222, 128, 0.14);--lh-bg-g7-a18b:rgba(74, 222, 128, 0.18);--lh-bg-g7-a20b:rgba(74, 222, 128, 0.2);--lh-bg-g7-a7b:rgba(74, 222, 128, 0.07);--lh-bg-n1-a70b:rgba(11, 18, 32, 0.7);--lh-bg-n1b:#0b1220;--lh-bg-n1c:#020617;--lh-bg-n1d:#0e1418;--lh-bg-n1e:#0b1120;--lh-bg-n2b:#18232b;--lh-bg-n2c:#141c22;--lh-bg-n2d:#2a1520;--lh-bg-n9b:#f5f8fa;--lh-bg-n9c:#ffffff;--lh-bg-n9d:#eef3f6;--lh-bg-o2b:#3a2a06;--lh-bg-o2c:#2a1f0b;--lh-bg-o2d:#2a2008;--lh-bg-o7-a12b:rgba(251, 191, 36, 0.12);--lh-bg-o7-a14b:rgba(251, 191, 36, 0.14);--lh-bg-o7-a7b:rgba(251, 191, 36, 0.07);--lh-bg-o7b:#fbbf24;--lh-bg-o8-a8b:rgba(255, 207, 92, 0.08);--lh-bg-or3b:#78350f;--lh-bg-p3b:#4c1d95;--lh-bg-pb2b:#1b1740;--lh-bg-pb2c:#1e1b4b;--lh-bg-r3b:#7f1d1d;--lh-bg-r6-a10b:rgba(248, 113, 113, 0.1);--lh-bg-r6-a16b:rgba(248, 113, 113, 0.16);--lh-bg-r6-a22b:rgba(248, 113, 113, 0.22);--lh-bg-r6-a7b:rgba(248, 113, 113, 0.07);--lh-bg-r6b:#fb7185;--lh-bg-rb2b:#2b1220;--lh-bg-tc3b:#134e4a;--lh-bg-tg2b:#0c2b23;--lh-bg-tg3b:#0f3a2b;--lh-bg-tg7-a8b:rgba(52, 211, 153, 0.08);--lh-bg-tg7b:#34d399;--lh-bg-tg8b:#6ee7b7;--lh-ink-b3b:#334155;--lh-ink-b4b:#475569;--lh-ink-b5b:#64748b;--lh-ink-b6-a10b:rgba(129, 140, 248, 0.1);--lh-ink-b6-a40b:rgba(129, 140, 248, 0.4);--lh-ink-b6b:#94a3b8;--lh-ink-b6c:#818cf8;--lh-ink-b8b:#d7e2f4;--lh-ink-b8c:#dbe7f8;--lh-ink-b8d:#c7d2fe;--lh-ink-cb1b:#06121f;--lh-ink-cb2b:#1c2b34;--lh-ink-cb4b:#155e75;--lh-ink-cb4c:#4a5f6d;--lh-ink-cb5b:#63788a;--lh-ink-cb5c:#5f7180;--lh-ink-cb6b:#8fa3b0;--lh-ink-cb6c:#60a5fa;--lh-ink-cb7-a35b:rgba(56, 189, 248, 0.35);--lh-ink-cb7b:#38bdf8;--lh-ink-cb7c:#7dd3fc;--lh-ink-cb7d:#93c5fd;--lh-ink-cb8b:#cbd5e1;--lh-ink-cb8c:#bae6fd;--lh-ink-cb8d:#cfefff;--lh-ink-g7b:#4ade80;--lh-ink-g8b:#86efac;--lh-ink-n1b:#0b1120;--lh-ink-n1c:#0b1220;--lh-ink-n1d:#0b1020;--lh-ink-n8b:#e2e8f0;--lh-ink-n8c:#d8e3ea;--lh-ink-n9b:#f1f5f9;--lh-ink-o7-a14b:rgba(251, 191, 36, 0.14);--lh-ink-o7b:#fbbf24;--lh-ink-o8b:#fde68a;--lh-ink-o8c:#fde3a7;--lh-ink-pb4b:#4338ca;--lh-ink-pb6b:#a78bfa;--lh-ink-pb7b:#c4b5fd;--lh-ink-pb8b:#ddd6fe;--lh-ink-r6-a6b:rgba(248, 113, 113, 0.06);--lh-ink-r6b:#f87171;--lh-ink-r6c:#fb7185;--lh-ink-r7b:#fca5a5;--lh-ink-r8b:#fecaca;--lh-ink-tc8b:#a5f3fc;--lh-ink-tg7-a16b:rgba(52, 211, 153, 0.16);--lh-ink-tg7b:#34d399;--lh-ink-tg8b:#99f6e4;--lh-ink-tg8c:#6ee7b7;--lh-line-b2b:#1f2b3f;--lh-line-b2c:#1e293b;--lh-line-b2d:#1c2a44;--lh-line-b2e:#16233c;--lh-line-b3-a50b:rgba(51, 65, 85, 0.5);--lh-line-b3b:#334155;--lh-line-b3c:#2c3b57;--lh-line-b3d:#263449;--lh-line-b3e:#24344f;--lh-line-b3f:#2b3d5e;--lh-line-b3g:#31456b;--lh-line-b3h:#22334f;--lh-line-b3i:#26406b;--lh-line-b4-a67b:rgba(29, 78, 216, 0.6667);--lh-line-b4b:#475569;--lh-line-b6-a16b:rgba(148, 163, 184, 0.16);--lh-line-b6b:#818cf8;--lh-line-cb3b:#26343f;--lh-line-cb4b:#155e75;--lh-line-cb4c:#3b5a7a;--lh-line-cb7-a30b:rgba(56, 189, 248, 0.3);--lh-line-cb7b:#38bdf8;--lh-line-g7b:#4ade80;--lh-line-n3b:#3f2f34;--lh-line-n8b:#d3dee5;--lh-line-o4b:#6b4a12;--lh-line-o4c:#6b5a2f;--lh-line-o7-a30b:rgba(251, 191, 36, 0.3);--lh-line-o7b:#fbbf24;--lh-line-p4-a67b:rgba(124, 58, 237, 0.6667);--lh-line-pb3b:#312e81;--lh-line-r6-a50b:rgba(248, 113, 113, 0.5);--lh-line-r6b:#f87171;--lh-line-r6c:#fb7185;--lh-line-tg4b:#2f6b52;--lh-line-tg7b:#34d399;--lh-shd-cb7-a25b:rgba(56, 189, 248, 0.25);--lh-shd-n1-a60b:rgba(2, 6, 23, 0.6);--lh-shd-o7-a0b:rgba(251, 191, 36, 0);--lh-shd-o7-a85b:rgba(251, 191, 36, 0.85)}
+html[data-theme="dark"]{--lh-acc-b6b:#818cf8;--lh-acc-cb5b:#5bc4f8;--lh-acc-cb7b:#38bdf8;--lh-acc-cb7c:#37c2ff;--lh-acc-g7b:#4ade80;--lh-acc-o5b:#f8c95b;--lh-acc-o7b:#fbbf24;--lh-acc-o8b:#ffcf5c;--lh-acc-r6b:#f87171;--lh-acc-r6c:#fb7185;--lh-acc-tg7b:#34d399;--lh-bg-b1b:#0a1122;--lh-bg-b1c:#0a1120;--lh-bg-b2-a50b:rgba(15, 23, 42, 0.5);--lh-bg-b2b:#0f172a;--lh-bg-b2c:#1e293b;--lh-bg-b2d:#111827;--lh-bg-b2e:#131c33;--lh-bg-b2f:#1a2236;--lh-bg-b2g:#16233c;--lh-bg-b2h:#111c33;--lh-bg-b2i:#0b1426;--lh-bg-b2j:#12233f;--lh-bg-b2k:#0d1729;--lh-bg-b2l:#122036;--lh-bg-b2m:#0d1a2e;--lh-bg-b2n:#122240;--lh-bg-b2o:#16223a;--lh-bg-b2p:#131b2e;--lh-bg-b3b:#25334a;--lh-bg-b3c:#334155;--lh-bg-b3d:#233046;--lh-bg-b3e:#24344d;--lh-bg-b3f:#1d2e4d;--lh-bg-b4b:#3d4c63;--lh-bg-b5b:#64748b;--lh-bg-b6-a10b:rgba(129, 140, 248, 0.1);--lh-bg-b6-a15b:rgba(129, 140, 248, 0.15);--lh-bg-b6-a16b:rgba(129, 140, 248, 0.16);--lh-bg-b6-a5b:rgba(148, 163, 184, 0.05);--lh-bg-b6-a7b:rgba(129, 140, 248, 0.07);--lh-bg-b6-a8b:rgba(129, 140, 248, 0.08);--lh-bg-b6b:#818cf8;--lh-bg-cb2b:#0f2436;--lh-bg-cb2c:#0c2b3a;--lh-bg-cb2d:#0c2233;--lh-bg-cb3b:#164e63;--lh-bg-cb3c:#0c3a52;--lh-bg-cb7-a10b:rgba(56, 189, 248, 0.1);--lh-bg-cb7-a12b:rgba(56, 189, 248, 0.12);--lh-bg-cb7-a14b:rgba(56, 189, 248, 0.14);--lh-bg-cb7-a15b:rgba(56, 189, 248, 0.15);--lh-bg-cb7-a16b:rgba(56, 189, 248, 0.16);--lh-bg-cb7-a6b:rgba(56, 189, 248, 0.06);--lh-bg-cb7-a7b:rgba(56, 189, 248, 0.07);--lh-bg-cb7b:#38bdf8;--lh-bg-g7-a14b:rgba(74, 222, 128, 0.14);--lh-bg-g7-a18b:rgba(74, 222, 128, 0.18);--lh-bg-g7-a20b:rgba(74, 222, 128, 0.2);--lh-bg-g7-a7b:rgba(74, 222, 128, 0.07);--lh-bg-n1-a70b:rgba(11, 18, 32, 0.7);--lh-bg-n1b:#0b1220;--lh-bg-n1c:#020617;--lh-bg-n1d:#0e1418;--lh-bg-n1e:#0b1120;--lh-bg-n2b:#18232b;--lh-bg-n2c:#141c22;--lh-bg-n2d:#2a1520;--lh-bg-n9b:#1f292f;--lh-bg-n9c:#2a2a2a;--lh-bg-n9d:#1e272c;--lh-bg-o2b:#3a2a06;--lh-bg-o2c:#2a1f0b;--lh-bg-o2d:#2a2008;--lh-bg-o7-a12b:rgba(251, 191, 36, 0.12);--lh-bg-o7-a14b:rgba(251, 191, 36, 0.14);--lh-bg-o7-a7b:rgba(251, 191, 36, 0.07);--lh-bg-o7b:#fbbf24;--lh-bg-o8-a8b:rgba(255, 207, 92, 0.08);--lh-bg-or3b:#78350f;--lh-bg-p3b:#4c1d95;--lh-bg-pb2b:#1b1740;--lh-bg-pb2c:#1e1b4b;--lh-bg-r3b:#7f1d1d;--lh-bg-r6-a10b:rgba(248, 113, 113, 0.1);--lh-bg-r6-a16b:rgba(248, 113, 113, 0.16);--lh-bg-r6-a22b:rgba(248, 113, 113, 0.22);--lh-bg-r6-a7b:rgba(248, 113, 113, 0.07);--lh-bg-r6b:#fb7185;--lh-bg-rb2b:#2b1220;--lh-bg-tc3b:#134e4a;--lh-bg-tg2b:#0c2b23;--lh-bg-tg3b:#0f3a2b;--lh-bg-tg7-a8b:rgba(52, 211, 153, 0.08);--lh-bg-tg7b:#34d399;--lh-bg-tg8b:#6ee7b7;--lh-ink-b3b:#334155;--lh-ink-b4b:#475569;--lh-ink-b5b:#64748b;--lh-ink-b6-a10b:rgba(129, 140, 248, 0.1);--lh-ink-b6-a40b:rgba(129, 140, 248, 0.4);--lh-ink-b6b:#94a3b8;--lh-ink-b6c:#818cf8;--lh-ink-b8b:#d7e2f4;--lh-ink-b8c:#dbe7f8;--lh-ink-b8d:#c7d2fe;--lh-ink-cb1b:#06121f;--lh-ink-cb2b:#ebf2f5;--lh-ink-cb4b:#155e75;--lh-ink-cb4c:#e4eaee;--lh-ink-cb5b:#63788a;--lh-ink-cb5c:#e2e7eb;--lh-ink-cb6b:#8fa3b0;--lh-ink-cb6c:#60a5fa;--lh-ink-cb7-a35b:rgba(56, 189, 248, 0.35);--lh-ink-cb7b:#38bdf8;--lh-ink-cb7c:#7dd3fc;--lh-ink-cb7d:#93c5fd;--lh-ink-cb8b:#cbd5e1;--lh-ink-cb8c:#bae6fd;--lh-ink-cb8d:#cfefff;--lh-ink-g7b:#4ade80;--lh-ink-g8b:#86efac;--lh-ink-n1b:#0b1120;--lh-ink-n1c:#0b1220;--lh-ink-n1d:#0b1020;--lh-ink-n8b:#e2e8f0;--lh-ink-n8c:#d8e3ea;--lh-ink-n9b:#f1f5f9;--lh-ink-o7-a14b:rgba(251, 191, 36, 0.14);--lh-ink-o7b:#fbbf24;--lh-ink-o8b:#fde68a;--lh-ink-o8c:#fde3a7;--lh-ink-pb4b:#4338ca;--lh-ink-pb6b:#a78bfa;--lh-ink-pb7b:#c4b5fd;--lh-ink-pb8b:#ddd6fe;--lh-ink-r6-a6b:rgba(248, 113, 113, 0.06);--lh-ink-r6b:#f87171;--lh-ink-r6c:#fb7185;--lh-ink-r7b:#fca5a5;--lh-ink-r8b:#fecaca;--lh-ink-tc8b:#a5f3fc;--lh-ink-tg7-a16b:rgba(52, 211, 153, 0.16);--lh-ink-tg7b:#34d399;--lh-ink-tg8b:#99f6e4;--lh-ink-tg8c:#6ee7b7;--lh-line-b2b:#1f2b3f;--lh-line-b2c:#1e293b;--lh-line-b2d:#1c2a44;--lh-line-b2e:#16233c;--lh-line-b3-a50b:rgba(51, 65, 85, 0.5);--lh-line-b3b:#334155;--lh-line-b3c:#2c3b57;--lh-line-b3d:#263449;--lh-line-b3e:#24344f;--lh-line-b3f:#2b3d5e;--lh-line-b3g:#31456b;--lh-line-b3h:#22334f;--lh-line-b3i:#26406b;--lh-line-b4-a67b:rgba(29, 78, 216, 0.6667);--lh-line-b4b:#475569;--lh-line-b6-a16b:rgba(148, 163, 184, 0.16);--lh-line-b6b:#818cf8;--lh-line-cb3b:#26343f;--lh-line-cb4b:#155e75;--lh-line-cb4c:#3b5a7a;--lh-line-cb7-a30b:rgba(56, 189, 248, 0.3);--lh-line-cb7b:#38bdf8;--lh-line-g7b:#4ade80;--lh-line-n3b:#3f2f34;--lh-line-n8b:#374a55;--lh-line-o4b:#6b4a12;--lh-line-o4c:#6b5a2f;--lh-line-o7-a30b:rgba(251, 191, 36, 0.3);--lh-line-o7b:#fbbf24;--lh-line-p4-a67b:rgba(124, 58, 237, 0.6667);--lh-line-pb3b:#312e81;--lh-line-r6-a50b:rgba(248, 113, 113, 0.5);--lh-line-r6b:#f87171;--lh-line-r6c:#fb7185;--lh-line-tg4b:#2f6b52;--lh-line-tg7b:#34d399;--lh-shd-cb7-a25b:rgba(56, 189, 248, 0.25);--lh-shd-n1-a60b:rgba(2, 6, 23, 0.6);--lh-shd-o7-a0b:rgba(251, 191, 36, 0);--lh-shd-o7-a85b:rgba(251, 191, 36, 0.85)}
+html[data-theme="light"]{--lh-acc-b6b:#0b18a0;--lh-acc-cb5b:#0a72a5;--lh-acc-cb7b:#054a69;--lh-acc-cb7c:#044a69;--lh-acc-g7b:#105329;--lh-acc-o5b:#8a6100;--lh-acc-o7b:#5f4604;--lh-acc-o8b:#5f4504;--lh-acc-r6b:#980909;--lh-acc-r6c:#90061a;--lh-acc-tg7b:#12513a;--lh-bg-b1b:#f9f9fb;--lh-bg-b1c:#f9fafb;--lh-bg-b2-a50b:rgba(248, 248, 250, 0.5);--lh-bg-b2b:#f8f8fa;--lh-bg-b2c:#f5f6f7;--lh-bg-b2d:#f8f8fa;--lh-bg-b2e:#f7f7f9;--lh-bg-b2f:#f6f7f8;--lh-bg-b2g:#bbc7dd;--lh-bg-b2h:#f7f7f9;--lh-bg-b2i:#f8f9fa;--lh-bg-b2j:#bac8de;--lh-bg-b2k:#f8f9fa;--lh-bg-b2l:#f6f7f9;--lh-bg-b2m:#f7f8fa;--lh-bg-b2n:#b9c6df;--lh-bg-b2o:#f6f7f8;--lh-bg-b2p:#f7f8f9;--lh-bg-b3b:#f4f4f6;--lh-bg-b3c:#f2f3f4;--lh-bg-b3d:#f4f5f6;--lh-bg-b3e:#f3f4f6;--lh-bg-b3f:#bbc7dd;--lh-bg-b4b:#f0f1f2;--lh-bg-b5b:#eff0f1;--lh-bg-b6-a10b:rgba(129, 140, 248, 0.1);--lh-bg-b6-a15b:rgba(129, 140, 248, 0.15);--lh-bg-b6-a16b:rgba(129, 140, 248, 0.16);--lh-bg-b6-a5b:rgba(148, 163, 184, 0.05);--lh-bg-b6-a7b:rgba(129, 140, 248, 0.07);--lh-bg-b6-a8b:rgba(129, 140, 248, 0.08);--lh-bg-b6b:#818cf8;--lh-bg-cb2b:#f6f8f9;--lh-bg-cb2c:#f6f8f9;--lh-bg-cb2d:#f7f8fa;--lh-bg-cb3b:#b7d6e1;--lh-bg-cb3c:#b3d4e5;--lh-bg-cb7-a10b:rgba(56, 189, 248, 0.1);--lh-bg-cb7-a12b:rgba(56, 189, 248, 0.12);--lh-bg-cb7-a14b:rgba(56, 189, 248, 0.14);--lh-bg-cb7-a15b:rgba(56, 189, 248, 0.15);--lh-bg-cb7-a16b:rgba(56, 189, 248, 0.16);--lh-bg-cb7-a6b:rgba(56, 189, 248, 0.06);--lh-bg-cb7-a7b:rgba(56, 189, 248, 0.07);--lh-bg-cb7b:#add8eb;--lh-bg-g7-a14b:rgba(74, 222, 128, 0.14);--lh-bg-g7-a18b:rgba(74, 222, 128, 0.18);--lh-bg-g7-a20b:rgba(74, 222, 128, 0.2);--lh-bg-g7-a7b:rgba(74, 222, 128, 0.07);--lh-bg-n1-a70b:rgba(249, 249, 251, 0.7);--lh-bg-n1b:#f9f9fb;--lh-bg-n1c:#fafbfc;--lh-bg-n1d:#fafafb;--lh-bg-n1e:#f9f9fb;--lh-bg-n2b:#f7f8f9;--lh-bg-n2c:#f8f9f9;--lh-bg-n2d:#f9f8f8;--lh-bg-n9b:#f5f8fa;--lh-bg-n9c:#ffffff;--lh-bg-n9d:#eef3f6;--lh-bg-o2b:#e7d6b1;--lh-bg-o2c:#faf9f8;--lh-bg-o2d:#fbfaf8;--lh-bg-o7-a12b:rgba(251, 191, 36, 0.12);--lh-bg-o7-a14b:rgba(251, 191, 36, 0.14);--lh-bg-o7-a7b:rgba(251, 191, 36, 0.07);--lh-bg-o7b:#ebdaad;--lh-bg-o8-a8b:rgba(255, 207, 92, 0.08);--lh-bg-or3b:#e6c5b2;--lh-bg-p3b:#c7b6e2;--lh-bg-pb2b:#bebbdd;--lh-bg-pb2c:#bdbbdd;--lh-bg-r3b:#e1b7b7;--lh-bg-r6-a10b:rgba(248, 113, 113, 0.1);--lh-bg-r6-a16b:rgba(248, 113, 113, 0.16);--lh-bg-r6-a22b:rgba(248, 113, 113, 0.22);--lh-bg-r6-a7b:rgba(248, 113, 113, 0.07);--lh-bg-r6b:#fb7185;--lh-bg-rb2b:#f9f8f9;--lh-bg-tc3b:#b8e0dd;--lh-bg-tg2b:#f8faf9;--lh-bg-tg3b:#b9dfd2;--lh-bg-tg7-a8b:rgba(52, 211, 153, 0.08);--lh-bg-tg7b:#b7e1d2;--lh-bg-tg8b:#6ee7b7;--lh-ink-b3b:#334155;--lh-ink-b4b:#3a475a;--lh-ink-b5b:#3e4a5a;--lh-ink-b6-a10b:rgba(11, 24, 160, 0.1);--lh-ink-b6-a40b:rgba(11, 24, 160, 0.4);--lh-ink-b6b:#344052;--lh-ink-b6c:#0b18a0;--lh-ink-b8b:#16243a;--lh-ink-b8c:#152338;--lh-ink-b8d:#0726a4;--lh-ink-cb1b:#06121f;--lh-ink-cb2b:#1c2b34;--lh-ink-cb4b:#135165;--lh-ink-cb4c:#4a5f6d;--lh-ink-cb5b:#3a4854;--lh-ink-cb5c:#5f7180;--lh-ink-cb6b:#384853;--lh-ink-cb6c:#064490;--lh-ink-cb7-a35b:rgba(5, 74, 105, 0.35);--lh-ink-cb7b:#054a69;--lh-ink-cb7c:#054f73;--lh-ink-cb7d:#064790;--lh-ink-cb8b:#212d3c;--lh-ink-cb8c:#054d73;--lh-ink-cb8d:#162d39;--lh-ink-g7b:#105329;--lh-ink-g8b:#0b4e23;--lh-ink-n1b:#0b1120;--lh-ink-n1c:#0b1220;--lh-ink-n1d:#0b1020;--lh-ink-n8b:#192534;--lh-ink-n8c:#1c2d38;--lh-ink-n9b:#132230;--lh-ink-o7-a14b:rgba(95, 70, 4, 0.14);--lh-ink-o7b:#5f4604;--lh-ink-o8b:#564504;--lh-ink-o8c:#5f4404;--lh-ink-pb4b:#2c2586;--lh-ink-pb6b:#2f09a2;--lh-ink-pb7b:#2807a4;--lh-ink-pb8b:#2207a4;--lh-ink-r6-a6b:rgba(152, 9, 9, 0.06);--lh-ink-r6b:#980909;--lh-ink-r6c:#90061a;--lh-ink-r7b:#900606;--lh-ink-r8b:#900606;--lh-ink-tc8b:#044d56;--lh-ink-tg7-a16b:rgba(18, 81, 58, 0.16);--lh-ink-tg7b:#12513a;--lh-ink-tg8b:#085143;--lh-ink-tg8c:#0f5539;--lh-line-b2b:#d1d8e3;--lh-line-b2c:#d1d8e3;--lh-line-b2d:#cfd7e5;--lh-line-b2e:#cfd7e5;--lh-line-b3-a50b:rgba(211, 217, 225, 0.5);--lh-line-b3b:#d3d9e1;--lh-line-b3c:#d1d7e3;--lh-line-b3d:#d1d8e3;--lh-line-b3e:#d0d7e4;--lh-line-b3f:#d0d7e4;--lh-line-b3g:#d0d7e4;--lh-line-b3h:#cfd7e5;--lh-line-b3i:#cfd7e5;--lh-line-b4-a67b:rgba(207, 213, 229, 0.6667);--lh-line-b4b:#d5d9df;--lh-line-b6-a16b:rgba(148, 163, 184, 0.16);--lh-line-b6b:#818cf8;--lh-line-cb3b:#d3dbe1;--lh-line-cb4b:#cfe0e5;--lh-line-cb4c:#d0dae4;--lh-line-cb7-a30b:rgba(56, 189, 248, 0.3);--lh-line-cb7b:#cfdee5;--lh-line-g7b:#cfe5d7;--lh-line-n3b:#ded6d9;--lh-line-n8b:#d3dee5;--lh-line-o4b:#e5ddcf;--lh-line-o4c:#e5dfcf;--lh-line-o7-a30b:rgba(251, 191, 36, 0.3);--lh-line-o7b:#e5dfcf;--lh-line-p4-a67b:rgba(215, 207, 229, 0.6667);--lh-line-pb3b:#d0cfe5;--lh-line-r6-a50b:rgba(248, 113, 113, 0.5);--lh-line-r6b:#f87171;--lh-line-r6c:#fb7185;--lh-line-tg4b:#cfe5dc;--lh-line-tg7b:#cfe5dd;--lh-shd-cb7-a25b:rgba(0, 0, 0, 0.1375);--lh-shd-n1-a60b:rgba(2, 6, 23, 0.6);--lh-shd-o7-a0b:rgba(0, 0, 0, 0);--lh-shd-o7-a85b:rgba(0, 0, 0, 0.4675)}
+/* SVG 图解里的 fill / stroke / stop-color 属性：页面的字一个都不改，靠下面这些属性选择器把颜色接到色板上。
+   为什么不就地改写属性值：这些写法大半躺在 JS 拼的字符串里，动引号就把整段脚本
+   改坏了（图解直接空白）；而属性值里写 var() 各家浏览器支持不一，属性选择器配
+   CSS 属性则到处都认。深色档里 token 的值就是原来的颜色，所以默认外观逐像素不变。
+   外面套 :where() 是为了权重归零：属性选择器本身是 (0,1,1)，会盖过页面自己的
+   类选择器（.ax-t{fill:…} 只算 (0,1,0)），把"本来由类说了算"的颜色抢过来，
+   默认档就和 HEAD 长得不一样。:where() 仍在表现属性那一层之上，该接的还是接得住。 */
+:where([stop-color="#1e293b"]){stop-color:var(--lh-bg-b2c)}
+:where([stop-color="#233046"]){stop-color:var(--lh-bg-b3d)}
+:where([stroke="#475569"]){stroke:var(--lh-line-b4b)}
+:where([stroke="#f87171"]){stroke:var(--lh-ink-r6b)}
+:where(circle[fill="#34d399"]){fill:var(--lh-bg-tg7b)}
+:where(circle[stroke="#1f2b3f"]){stroke:var(--lh-line-b2b)}
+:where(circle[stroke="#3f2f34"]){stroke:var(--lh-line-n3b)}
+:where(line[stroke="#31456b"]){stroke:var(--lh-line-b3g)}
+:where(line[stroke="#34d399"]){stroke:var(--lh-ink-tg7b)}
+:where(line[stroke="#475569"]){stroke:var(--lh-line-b4b)}
+:where(line[stroke="#818cf8"]){stroke:var(--lh-ink-b6c)}
+:where(line[stroke="#f87171"]){stroke:var(--lh-ink-r6b)}
+:where(path[fill="#34d399"]){fill:var(--lh-bg-tg7b)}
+:where(path[fill="#64748b"]){fill:var(--lh-bg-b5b)}
+:where(path[fill="#818cf8"]){fill:var(--lh-bg-b6b)}
+:where(path[fill="#fbbf24"]){fill:var(--lh-bg-o7b)}
+:where(path[stroke="#2c3b57"]){stroke:var(--lh-line-b3c)}
+:where(rect[fill="#0b1220"]){fill:var(--lh-bg-n1b)}
+:where(rect[fill="#0f2436"]){fill:var(--lh-bg-cb2b)}
+:where(rect[fill="#111827"]){fill:var(--lh-bg-b2d)}
+:where(rect[fill="#164e63"]){fill:var(--lh-bg-cb3b)}
+:where(rect[fill="#1e293b"]){fill:var(--lh-bg-b2c)}
+:where(rect[fill="#38bdf8"]){fill:var(--lh-bg-cb7b)}
+:where(rect[fill="#4c1d95"]){fill:var(--lh-bg-p3b)}
+:where(rect[fill="#818cf8"]){fill:var(--lh-bg-b6b)}
+:where(rect[stroke="#155e75"]){stroke:var(--lh-line-cb4b)}
+:where(rect[stroke="#24344f"]){stroke:var(--lh-line-b3e)}
+:where(rect[stroke="#312e81"]){stroke:var(--lh-line-pb3b)}
+:where(rect[stroke="#38bdf8"]){stroke:var(--lh-ink-cb7b)}
+:where(rect[stroke="#818cf8"]){stroke:var(--lh-ink-b6c)}
+:where(text[fill="#155e75"]){fill:var(--lh-ink-cb4b)}
+:where(text[fill="#34d399"]){fill:var(--lh-ink-tg7b)}
+:where(text[fill="#38bdf8"]){fill:var(--lh-ink-cb7b)}
+:where(text[fill="#4338ca"]){fill:var(--lh-ink-pb4b)}
+:where(text[fill="#475569"]){fill:var(--lh-ink-b4b)}
+:where(text[fill="#64748b"]){fill:var(--lh-ink-b5b)}
+:where(text[fill="#7dd3fc"]){fill:var(--lh-ink-cb7c)}
+:where(text[fill="#818cf8"]){fill:var(--lh-ink-b6c)}
+:where(text[fill="#94a3b8"]){fill:var(--lh-ink-b6b)}
+:where(text[fill="#a78bfa"]){fill:var(--lh-ink-pb6b)}
+:where(text[fill="#bae6fd"]){fill:var(--lh-ink-cb8c)}
+:where(text[fill="#c4b5fd"]){fill:var(--lh-ink-pb7b)}
+:where(text[fill="#ddd6fe"]){fill:var(--lh-ink-pb8b)}
+:where(text[fill="#e2e8f0"]){fill:var(--lh-ink-n8b)}
+:where(text[fill="#f87171"]){fill:var(--lh-ink-r6b)}
+:where(text[fill="#fbbf24"]){fill:var(--lh-ink-o7b)}
+:where(tspan[fill="#34d399"]){fill:var(--lh-ink-tg7b)}
+:where(tspan[fill="#f87171"]){fill:var(--lh-ink-r6b)}
+:where(tspan[fill="#fbbf24"]){fill:var(--lh-ink-o7b)}

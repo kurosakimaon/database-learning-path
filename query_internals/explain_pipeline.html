@@ -1,21 +1,22 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+<script>(function(){var d=document.documentElement,p="auto",t;try{p=localStorage.getItem("lh-theme")||"auto";}catch(e){}if(p!=="light"&&p!=="dark")p="auto";try{t=p==="auto"?(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark"):p;}catch(e){t="dark";}d.setAttribute("data-theme",t);d.setAttribute("data-theme-pref",p);})();</script>
 <meta charset="UTF-8">
 <title>一条 SQL 的旅程 — 从字符串到结果的六道工序</title>
 <style>
   :root {
-    --bg: #0f172a;
-    --panel: #111c33;
-    --panel2: #0b1426;
-    --border: #263449;
-    --acc: #38bdf8;
-    --acc2: #818cf8;
-    --text: #e2e8f0;
-    --muted: #94a3b8;
-    --good: #34d399;
-    --warn: #fbbf24;
-    --bad: #f87171;
+    --bg: var(--lh-bg-b2b);
+    --panel: var(--lh-bg-b2h);
+    --panel2: var(--lh-bg-b2i);
+    --border: var(--lh-line-b3d);
+    --acc: var(--lh-acc-cb7b);
+    --acc2: var(--lh-acc-b6b);
+    --text: var(--lh-ink-n8b);
+    --muted: var(--lh-ink-b6b);
+    --good: var(--lh-acc-tg7b);
+    --warn: var(--lh-acc-o7b);
+    --bad: var(--lh-acc-r6b);
     --mono: Consolas, "Courier New", monospace;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -25,9 +26,9 @@
     padding: 24px 28px 60px;
   }
   h1 { font-size: 24px; margin-bottom: 4px; }
-  h1 .hl { color: var(--acc); }
+  h1 .hl { color: var(--lh-ink-cb7b); }
   .sub { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
-  .sub code { font-family: var(--mono); color: var(--warn); }
+  .sub code { font-family: var(--mono); color: var(--lh-ink-o7b); }
 
   /* ---------- 控制条 ---------- */
   .bar {
@@ -36,15 +37,15 @@
     border-radius: 10px; padding: 10px 14px; margin-bottom: 16px;
   }
   .bar button {
-    background: #16233c; color: var(--text); border: 1px solid var(--border);
+    background: var(--lh-bg-b2g); color: var(--text); border: 1px solid var(--border);
     border-radius: 8px; padding: 7px 18px; font-size: 14px; cursor: pointer;
     font-family: inherit;
   }
-  .bar button:hover { border-color: var(--acc); color: var(--acc); }
+  .bar button:hover { border-color: var(--lh-line-cb7b); color: var(--lh-ink-cb7b); }
   .bar button:disabled { opacity: .35; cursor: not-allowed; }
-  .bar button.playing { border-color: var(--acc2); color: var(--acc2); }
+  .bar button.playing { border-color: var(--lh-line-b6b); color: var(--lh-ink-b6c); }
   .stepno { color: var(--muted); font-size: 13px; margin-left: auto; font-family: var(--mono); }
-  .stepno b { color: var(--acc); }
+  .stepno b { color: var(--lh-ink-cb7b); }
 
   /* ---------- 流水线阶段条 ---------- */
   .pipe { display: flex; align-items: stretch; gap: 0; margin-bottom: 16px; flex-wrap: wrap; }
@@ -56,13 +57,13 @@
   }
   .stage .t { font-size: 14px; font-weight: bold; }
   .stage .d { font-size: 11px; color: var(--muted); margin-top: 2px; }
-  .stage.done { border-color: #3b5a7a; }
-  .stage.done .t { color: var(--acc); }
+  .stage.done { border-color: var(--lh-line-cb4c); }
+  .stage.done .t { color: var(--lh-ink-cb7b); }
   .stage.on {
-    border-color: var(--acc); background: #12233f;
-    box-shadow: 0 0 12px rgba(56, 189, 248, .25);
+    border-color: var(--lh-line-cb7b); background: var(--lh-bg-b2j);
+    box-shadow: 0 0 12px var(--lh-shd-cb7-a25b);
   }
-  .stage.on .t { color: var(--acc); }
+  .stage.on .t { color: var(--lh-ink-cb7b); }
   .pipe .arrow {
     align-self: center; color: var(--muted); padding: 0 6px; font-size: 16px;
   }
@@ -74,9 +75,9 @@
     border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px;
     min-height: 420px;
   }
-  .detail h3 { font-size: 17px; margin-bottom: 10px; color: var(--acc); }
+  .detail h3 { font-size: 17px; margin-bottom: 10px; color: var(--lh-ink-cb7b); }
   .detail h3 .tag2 {
-    font-size: 11px; color: var(--acc2); border: 1px solid var(--acc2);
+    font-size: 11px; color: var(--lh-ink-b6c); border: 1px solid var(--lh-line-b6b);
     border-radius: 6px; padding: 1px 8px; vertical-align: 3px; margin-left: 8px;
   }
   .detail p { margin: 8px 0; }
@@ -86,53 +87,56 @@
     border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px;
     min-height: 420px;
   }
-  .panel h4 { font-size: 13px; color: var(--acc2); letter-spacing: 1px; margin-bottom: 8px; }
+  .panel h4 { font-size: 13px; color: var(--lh-ink-b6c); letter-spacing: 1px; margin-bottom: 8px; }
   .panel .io { margin: 10px 0; }
   .panel .io .lbl {
     display: inline-block; font-size: 11px; border-radius: 5px;
     padding: 1px 8px; margin-bottom: 4px;
   }
-  .panel .io .lbl.in  { background: rgba(56,189,248,.15); color: var(--acc); }
-  .panel .io .lbl.out { background: rgba(129,140,248,.15); color: var(--acc2); }
+  .panel .io .lbl.in  { background: var(--lh-bg-cb7-a15b); color: var(--lh-ink-cb7b); }
+  .panel .io .lbl.out { background: var(--lh-bg-b6-a15b); color: var(--lh-ink-b6c); }
   .panel pre, .detail pre {
     font-family: var(--mono); font-size: 12.5px; line-height: 1.6;
-    background: #0a1122; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--lh-bg-b1b); border: 1px solid var(--border); border-radius: 8px;
     padding: 10px 12px; overflow-x: auto; white-space: pre; color: var(--text);
     margin: 6px 0;
   }
-  .kw { color: var(--acc2); font-weight: bold; }
+  .kw { color: var(--lh-ink-b6c); font-weight: bold; }
   .id { color: var(--text); }
-  .num { color: var(--good); }
-  .op { color: var(--warn); }
-  .cmt { color: #64748b; }
-  .hl { color: var(--acc); }
-  .gold { color: var(--warn); }
-  .bad { color: var(--bad); }
-  .good { color: var(--good); }
+  .num { color: var(--lh-ink-tg7b); }
+  .op { color: var(--lh-ink-o7b); }
+  .cmt { color: var(--lh-ink-b5b); }
+  .hl { color: var(--lh-ink-cb7b); }
+  .gold { color: var(--lh-ink-o7b); }
+  .bad { color: var(--lh-ink-r6b); }
+  .good { color: var(--lh-ink-tg7b); }
 
   /* 代价表 */
   table.cost { border-collapse: collapse; width: 100%; font-size: 13px; margin: 8px 0; }
   table.cost th, table.cost td { border: 1px solid var(--border); padding: 6px 10px; text-align: right; }
-  table.cost th { background: #16233c; color: var(--muted); font-weight: normal; }
+  table.cost th { background: var(--lh-bg-b2g); color: var(--muted); font-weight: normal; }
   table.cost td.l, table.cost th.l { text-align: left; }
-  table.cost tr.pick { background: rgba(52,211,153,.08); }
-  table.cost tr.pick td { color: var(--good); }
+  table.cost tr.pick { background: var(--lh-bg-tg7-a8b); }
+  table.cost tr.pick td { color: var(--lh-ink-tg7b); }
   table.cost tr.lose td { color: var(--muted); }
 
   /* 火山模型 SVG 文字 */
   svg text { font-family: var(--mono); }
 
   .key {
-    border-left: 3px solid var(--acc2); background: rgba(129,140,248,.07);
+    border-left: 3px solid var(--lh-line-b6b); background: var(--lh-bg-b6-a7b);
     padding: 8px 12px; margin: 10px 0; font-size: 13.5px; border-radius: 0 8px 8px 0;
   }
-  .key b { color: var(--acc2); }
+  .key b { color: var(--lh-ink-b6c); }
 
   table.res { border-collapse: collapse; font-size: 13px; margin: 8px 0; }
   table.res th, table.res td { border: 1px solid var(--border); padding: 5px 16px; }
-  table.res th { background: #16233c; color: var(--muted); font-weight: normal; }
-  .foot { color: #64748b; font-size: 12px; margin-top: 20px; }
+  table.res th { background: var(--lh-bg-b2g); color: var(--muted); font-weight: normal; }
+  .foot { color: var(--lh-ink-b5b); font-size: 12px; margin-top: 20px; }
 </style>
+
+<link rel="stylesheet" href="../assets/theme.css">
+<script src="../assets/theme.js" defer></script>
 </head>
 <body>
 

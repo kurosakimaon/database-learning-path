@@ -1,40 +1,41 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+<script>(function(){var d=document.documentElement,p="auto",t;try{p=localStorage.getItem("lh-theme")||"auto";}catch(e){}if(p!=="light"&&p!=="dark")p="auto";try{t=p==="auto"?(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark"):p;}catch(e){t="dark";}d.setAttribute("data-theme",t);d.setAttribute("data-theme-pref",p);})();</script>
 <meta charset="utf-8">
 <title>连接池可视化 · 三种策略对比</title>
 <style>
 :root{
-  --bg:#0f172a; --surface:#1e293b; --surface-2:#25334a; --line:#334155;
-  --text:#e2e8f0; --muted:#94a3b8; --accent:#38bdf8; --accent-2:#818cf8;
-  --warn:#fbbf24; --bad:#f87171; --good:#34d399;
+  --bg:var(--lh-bg-b2b); --surface:var(--lh-bg-b2c); --surface-2:var(--lh-bg-b3b); --line:var(--lh-line-b3b);
+  --text:var(--lh-ink-n8b); --muted:var(--lh-ink-b6b); --accent:var(--lh-acc-cb7b); --accent-2:var(--lh-acc-b6b);
+  --warn:var(--lh-acc-o7b); --bad:var(--lh-acc-r6b); --good:var(--lh-acc-tg7b);
   --mono:Consolas,"Cascadia Mono","Courier New",monospace;
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);
   font:15px/1.75 "Microsoft YaHei","PingFang SC","Segoe UI",sans-serif;}
 .wrap{max-width:1400px;margin:0 auto;padding:24px 20px 80px;}
-h1{font-size:24px;margin:0 0 6px;color:var(--accent);}
-h2{font-size:17px;margin:26px 0 10px;color:var(--accent-2);}
+h1{font-size:24px;margin:0 0 6px;color:var(--lh-ink-cb7b);}
+h2{font-size:17px;margin:26px 0 10px;color:var(--lh-ink-b6c);}
 .sub{color:var(--muted);font-size:13.5px;margin:0 0 18px;}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:14px 0;}
 .ctl{display:flex;flex-wrap:wrap;gap:18px 26px;align-items:flex-end;}
 .ctl label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:4px;}
-.ctl .val{color:var(--accent);font-family:var(--mono);font-size:12.5px;}
+.ctl .val{color:var(--lh-ink-cb7b);font-family:var(--mono);font-size:12.5px;}
 input[type=range]{width:190px;accent-color:var(--accent);}
 select{background:var(--surface-2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 8px;font-family:var(--mono);}
 button{background:var(--surface-2);color:var(--text);border:1px solid var(--line);border-radius:8px;
   padding:8px 16px;font-size:14px;cursor:pointer;font-family:inherit;}
-button:hover{border-color:var(--accent);color:var(--accent);}
-button.primary{background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#0b1120;border:none;font-weight:700;}
+button:hover{border-color:var(--lh-line-cb7b);color:var(--lh-ink-cb7b);}
+button.primary{background:linear-gradient(90deg,var(--lh-bg-cb7b),var(--lh-bg-b6b));color:var(--lh-ink-n1b);border:none;font-weight:700;}
 button.ghost{padding:5px 10px;font-size:12.5px;}
 .row{display:flex;flex-wrap:wrap;gap:14px;}
 .card{flex:1 1 380px;min-width:340px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;}
 .card h3{margin:0 0 2px;font-size:15px;}
 .card .tag{display:inline-block;font-size:11px;font-family:var(--mono);padding:1px 7px;border-radius:999px;margin-left:6px;vertical-align:2px;}
-.t1{background:#7f1d1d;color:#fecaca}.t2{background:#78350f;color:#fde68a}.t3{background:#134e4a;color:#99f6e4}
+.t1{background:var(--lh-bg-r3b);color:var(--lh-ink-r8b)}.t2{background:var(--lh-bg-or3b);color:var(--lh-ink-o8b)}.t3{background:var(--lh-bg-tc3b);color:var(--lh-ink-tg8b)}
 .card .one{color:var(--muted);font-size:12.5px;margin:0 0 8px;}
-svg{display:block;width:100%;height:auto;background:#0b1220;border-radius:8px;}
+svg{display:block;width:100%;height:auto;background:var(--lh-bg-n1b);border-radius:8px;}
 .metrics{margin-top:10px;}
 .m{display:grid;grid-template-columns:74px 1fr 96px;align-items:center;gap:8px;font-size:12px;margin:5px 0;}
 .m .bar{height:10px;background:var(--surface-2);border-radius:5px;overflow:hidden;}
@@ -42,26 +43,29 @@ svg{display:block;width:100%;height:auto;background:#0b1220;border-radius:8px;}
 .m .num{font-family:var(--mono);text-align:right;font-size:12px;}
 .counts{display:flex;gap:12px;flex-wrap:wrap;font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:8px;}
 .counts b{color:var(--text);font-weight:600;}
-.hint{background:#0b1220;border-left:3px solid var(--accent);padding:9px 13px;border-radius:0 8px 8px 0;font-size:13px;margin:12px 0;}
-.hint.bad{border-left-color:var(--bad);}
-.hint.good{border-left-color:var(--good);}
-pre{background:#020617;border:1px solid var(--line);border-radius:10px;padding:14px;overflow:auto;
-  font-family:var(--mono);font-size:13px;line-height:1.65;color:#cbd5e1;white-space:pre;}
-code{font-family:var(--mono);background:var(--surface-2);padding:1px 5px;border-radius:4px;font-size:13px;color:#a5f3fc;}
+.hint{background:var(--lh-bg-n1b);border-left:3px solid var(--lh-line-cb7b);padding:9px 13px;border-radius:0 8px 8px 0;font-size:13px;margin:12px 0;}
+.hint.bad{border-left-color:var(--lh-line-r6b);}
+.hint.good{border-left-color:var(--lh-line-tg7b);}
+pre{background:var(--lh-bg-n1c);border:1px solid var(--line);border-radius:10px;padding:14px;overflow:auto;
+  font-family:var(--mono);font-size:13px;line-height:1.65;color:var(--lh-ink-cb8b);white-space:pre;}
+code{font-family:var(--mono);background:var(--surface-2);padding:1px 5px;border-radius:4px;font-size:13px;color:var(--lh-ink-tc8b);}
 table{border-collapse:collapse;width:100%;font-size:13.5px;margin:10px 0;}
 th,td{border-bottom:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top;}
-th{color:var(--accent);font-weight:600;background:var(--surface-2);}
+th{color:var(--lh-ink-cb7b);font-weight:600;background:var(--surface-2);}
 .foot{color:var(--muted);font-size:12.5px;margin-top:30px;border-top:1px solid var(--line);padding-top:14px;}
-a{color:var(--accent);}
+a{color:var(--lh-ink-cb7b);}
 </style>
+
+<link rel="stylesheet" href="../assets/theme.css">
+<script src="../assets/theme.js" defer></script>
 </head>
 <body>
 <div class="wrap">
 <h1>连接池可视化：三种策略，同一批请求</h1>
 <p class="sub">三个面板吃的是<b>完全相同的到达序列和相同的单请求耗时</b>（同一个随机种子生成），所以数字可以横向比。
-左边是槽位，下面是等待队列。配色：<span style="color:#155e75">深青=空闲槽</span> /
-<span style="color:var(--accent)">蓝=正在用</span> / <span style="color:var(--warn)">黄=排队（接近超时转红）</span> /
-<span style="color:var(--bad)">红字指标=超时或被拒</span>；被当场拒掉的请求画成灰色虚线圈，它连队列都没进去。</p>
+左边是槽位，下面是等待队列。配色：<span style="color:var(--lh-ink-cb4b)">深青=空闲槽</span> /
+<span style="color:var(--lh-ink-cb7b)">蓝=正在用</span> / <span style="color:var(--lh-ink-o7b)">黄=排队（接近超时转红）</span> /
+<span style="color:var(--lh-ink-r6b)">红字指标=超时或被拒</span>；被当场拒掉的请求画成灰色虚线圈，它连队列都没进去。</p>
 
 <div class="panel">
   <div class="ctl">
@@ -105,8 +109,8 @@ a{color:var(--accent);}
     <button id="btnStep">⏭ 单步(+20ms)</button>
     <button id="btnReset">⟲ 重置</button>
     <span style="color:var(--muted);font-family:var(--mono);font-size:12.5px">
-      虚拟时钟 <b id="clk" style="color:var(--accent)">0.0</b> ms ｜ 请求总数 <b id="tot">300</b> ｜
-      理论需求连接数 M* = λS/1000 = <b id="mstar" style="color:var(--warn)">1.35</b>
+      虚拟时钟 <b id="clk" style="color:var(--lh-ink-cb7b)">0.0</b> ms ｜ 请求总数 <b id="tot">300</b> ｜
+      理论需求连接数 M* = λS/1000 = <b id="mstar" style="color:var(--lh-ink-o7b)">1.35</b>
     </span>
   </div>
   <div class="hint" id="verdict">先点「播放」，然后盯三条指标：<b>平均等待</b>、<b>超时/拒绝</b>、<b>池占用</b>。策略①的等待里天生多付一笔固定的建连钱，但它「不排队」是靠<b>不限连接数</b>换来的 —— 代价没消失，只是搬到了数据库那一侧。真正要练的是把 λ 和 S 拉大，看三条曲线什么时候分道扬镳。</div>
@@ -405,11 +409,11 @@ function render() {
             '</div>' +
             '<div class="counts"><span>完成 <b>' + sim.done + '</b></span><span>排队 <b>' + sim.queue.length + '</b></span>' +
             '<span>在跑 <b>' + (k.pool === 0 ? sim.running.length : countBusy(sim)) + '</b></span>' +
-            (util === null ? '' : '<span>池占用 <b style="color:#38bdf8">' + esc(util) + '%</b></span>') +
-            '<span>超时 <b style="color:#f87171">' + sim.dropped + '</b></span>' +
-            '<span>拒绝 <b style="color:#f87171">' + sim.rejected + '</b></span>' +
-            (k.pool === 0 ? '<span>建连 <b style="color:#a78bfa">' + sim.next + '</b> 次</span>' : '') +
-            (sim.finished ? '<span style="color:#34d399">跑完了</span>' : '') +
+            (util === null ? '' : '<span>池占用 <b style="color:var(--lh-ink-cb7b)">' + esc(util) + '%</b></span>') +
+            '<span>超时 <b style="color:var(--lh-ink-r6b)">' + sim.dropped + '</b></span>' +
+            '<span>拒绝 <b style="color:var(--lh-ink-r6b)">' + sim.rejected + '</b></span>' +
+            (k.pool === 0 ? '<span>建连 <b style="color:var(--lh-ink-pb6b)">' + sim.next + '</b> 次</span>' : '') +
+            (sim.finished ? '<span style="color:var(--lh-ink-tg7b)">跑完了</span>' : '') +
             '</div></div>';
   });
   stage.innerHTML = html;
@@ -432,7 +436,7 @@ function render() {
     ? '<br>再看 ③ 交了什么学费：它用 <b>' + stats[2].lost + ' 个失败</b>（排队超时 ' + sims[2].dropped +
       ' 个、队列满了当场拒 ' + sims[2].rejected + ' 个），把活下来那批的平均等待压到 ' + esc(stats[2].avgW) +
       ' ms，而 ② 让所有人一起等到 ' + esc(stats[1].avgW) + ' ms。快速失败不是认输，是把有限的连接留给还能按时交付的请求。' +
-      '<br><b style="color:#fbbf24">但 ③ 那个平均值只算了活下来的 ' + sims[2].done + ' 个</b> —— 被甩掉的 ' +
+      '<br><b style="color:var(--lh-ink-o7b)">但 ③ 那个平均值只算了活下来的 ' + sims[2].done + ' 个</b> —— 被甩掉的 ' +
       stats[2].lost + ' 个一个都不在分母里，这就是幸存者偏差：生产上要同时盯「成功率 + P99 + 平均值」，' +
       '只看平均值，就会把「甩掉慢请求」一路优化成「甩掉客户」。' +
       '再对比池占用：② ' + esc(utilOf(1)) + '%、③ ' + esc(utilOf(2)) + '%。③ 低不是因为它高效，' +

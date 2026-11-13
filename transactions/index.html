@@ -3,12 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>(function(){var d=document.documentElement,p="auto",t;try{p=localStorage.getItem("lh-theme")||"auto";}catch(e){}if(p!=="light"&&p!=="dark")p="auto";try{t=p==="auto"?(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark"):p;}catch(e){t="dark";}d.setAttribute("data-theme",t);d.setAttribute("data-theme-pref",p);})();</script>
 <title>第 3 关 · 心法期 · 事务与 ACID</title>
 <style>
   :root {
-    --bg: #0f172a; --bg2: #1e293b; --line: #334155;
-    --ink: #e2e8f0; --dim: #94a3b8;
-    --blue: #38bdf8; --indigo: #818cf8; --green: #34d399; --amber: #fbbf24;
+    --bg: var(--lh-bg-b2b); --bg2: var(--lh-bg-b2c); --line: var(--lh-line-b3b);
+    --ink: var(--lh-ink-n8b); --dim: var(--lh-ink-b6b);
+    --blue: var(--lh-ink-cb7b); --indigo: var(--lh-ink-b6c); --green: var(--lh-ink-tg7b); --amber: var(--lh-line-o7b);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -28,22 +29,25 @@
   .card b.file { color: var(--blue); font-family: Consolas, monospace; font-size: 14px; }
   .card .why { color: var(--dim); font-size: 13.5px; margin-top: 3px; }
   .card code {
-    background: #0b1220; border: 1px solid var(--line); border-radius: 6px;
-    padding: 1px 7px; font-family: Consolas, monospace; font-size: 12.5px; color: #a5f3fc;
+    background: var(--lh-bg-n1b); border: 1px solid var(--line); border-radius: 6px;
+    padding: 1px 7px; font-family: Consolas, monospace; font-size: 12.5px; color: var(--lh-ink-tc8b);
   }
   .cmd { display: block; margin-top: 8px; }
   a { color: var(--blue); text-decoration: none; }
   a:hover { text-decoration: underline; }
   table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 6px; }
   th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; }
-  th { color: var(--dim); background: #16223a; }
-  .ok { color: var(--green); } .no { color: #f87171; }
+  th { color: var(--dim); background: var(--lh-bg-b2o); }
+  .ok { color: var(--green); } .no { color: var(--lh-ink-r6b); }
   .note {
-    border-left: 3px solid var(--amber); background: #1a2236;
-    padding: 10px 14px; border-radius: 0 10px 10px 0; color: #fde68a; font-size: 14px;
+    border-left: 3px solid var(--amber); background: var(--lh-bg-b2f);
+    padding: 10px 14px; border-radius: 0 10px 10px 0; color: var(--lh-ink-o8b); font-size: 14px;
   }
   .foot { margin-top: 40px; color: var(--dim); font-size: 13px; border-top: 1px solid var(--line); padding-top: 14px; }
 </style>
+
+<link rel="stylesheet" href="../assets/theme.css">
+<script src="../assets/theme.js" defer></script>
 </head>
 <body>
 <div class="crumb">database-learning-path › 第 3 关</div>

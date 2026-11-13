@@ -3,21 +3,22 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>(function(){var d=document.documentElement,p="auto",t;try{p=localStorage.getItem("lh-theme")||"auto";}catch(e){}if(p!=="light"&&p!=="dark")p="auto";try{t=p==="auto"?(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark"):p;}catch(e){t="dark";}d.setAttribute("data-theme",t);d.setAttribute("data-theme-pref",p);})();</script>
 <title>第 5 关 · 结丹期：查询内幕 — 数据库学习路线</title>
 <style>
   :root {
-    --bg: #0f172a;
-    --surface: #1e293b;
-    --surface-2: #334155;
-    --ink: #f1f5f9;
-    --ink-muted: #94a3b8;
-    --ink-dim: #64748b;
-    --rule: #334155;
-    --accent: #38bdf8;
-    --accent-2: #818cf8;
-    --ok: #4ade80;
-    --warn: #fbbf24;
-    --bad: #f87171;
+    --bg: var(--lh-bg-b2b);
+    --surface: var(--lh-bg-b2c);
+    --surface-2: var(--lh-bg-b3c);
+    --ink: var(--lh-ink-n9b);
+    --ink-muted: var(--lh-ink-b6b);
+    --ink-dim: var(--lh-ink-b5b);
+    --rule: var(--lh-line-b3b);
+    --accent: var(--lh-acc-cb7b);
+    --accent-2: var(--lh-acc-b6b);
+    --ok: var(--lh-acc-g7b);
+    --warn: var(--lh-acc-o7b);
+    --bad: var(--lh-acc-r6b);
     --mono: "Consolas", "Cascadia Mono", "Courier New", ui-monospace, monospace;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -37,33 +38,33 @@
     display: inline-block;
     font-size: 12px;
     letter-spacing: .12em;
-    color: var(--accent);
-    border: 1px solid var(--accent);
+    color: var(--lh-ink-cb7b);
+    border: 1px solid var(--lh-line-cb7b);
     border-radius: 999px;
     padding: 3px 14px;
     margin-bottom: 14px;
   }
   .header h1 {
     font-size: 2rem;
-    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    background: linear-gradient(135deg, var(--lh-bg-cb7b), var(--lh-bg-b6b));
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
     margin-bottom: 10px;
   }
   .header p { color: var(--ink-muted); font-size: 14px; max-width: 760px; margin: 0 auto; }
-  .header code { font-family: var(--mono); color: var(--accent); }
+  .header code { font-family: var(--mono); color: var(--lh-ink-cb7b); }
 
   .thesis {
     max-width: 760px; margin: 18px auto 0;
-    background: rgba(56,189,248,.07);
-    border: 1px solid var(--accent);
+    background: var(--lh-bg-cb7-a7b);
+    border: 1px solid var(--lh-line-cb7b);
     border-radius: 12px;
     padding: 14px 20px;
     font-size: 14.5px;
     color: var(--ink);
   }
-  .thesis b { color: var(--accent); }
+  .thesis b { color: var(--lh-ink-cb7b); }
 
   .panel {
     background: var(--surface);
@@ -74,21 +75,21 @@
   }
   .panel h2 {
     font-size: 16px;
-    color: var(--accent);
+    color: var(--lh-ink-cb7b);
     margin-bottom: 12px;
     display: flex;
     align-items: center;
     gap: 8px;
   }
   .panel p { color: var(--ink-muted); font-size: 13.5px; }
-  .panel code { font-family: var(--mono); color: var(--accent); }
+  .panel code { font-family: var(--mono); color: var(--lh-ink-cb7b); }
   .panel b { color: var(--ink); }
 
   .why { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 12px; }
   .why > div {
-    background: rgba(56,189,248,.06);
+    background: var(--lh-bg-cb7-a6b);
     border: 1px solid var(--rule);
-    border-left: 3px solid var(--accent-2);
+    border-left: 3px solid var(--lh-line-b6b);
     border-radius: 9px;
     padding: 12px 14px;
     font-size: 13px;
@@ -112,12 +113,12 @@
   .card::before {
     content: '';
     position: absolute; top: 0; left: 0; right: 0; height: 3px;
-    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    background: linear-gradient(90deg, var(--lh-bg-cb7b), var(--lh-bg-b6b));
   }
   .card:hover {
     transform: translateY(-4px);
-    border-color: var(--accent);
-    box-shadow: 0 12px 32px rgba(2, 6, 23, .6);
+    border-color: var(--lh-line-cb7b);
+    box-shadow: 0 12px 32px var(--lh-shd-n1-a60b);
   }
   .card .no {
     font-family: var(--mono);
@@ -126,7 +127,7 @@
     margin-bottom: 6px;
   }
   .card .title { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
-  .card .title code { font-family: var(--mono); color: var(--accent); font-size: 15px; }
+  .card .title code { font-family: var(--mono); color: var(--lh-ink-cb7b); font-size: 15px; }
   .card .desc { font-size: 12.5px; color: var(--ink-muted); line-height: 1.65; min-height: 60px; }
   .card .tags { margin-top: 12px; display: flex; gap: 7px; flex-wrap: wrap; }
   .tag {
@@ -136,9 +137,9 @@
     background: var(--surface-2);
     color: var(--ink-muted);
   }
-  .tag.star { background: rgba(56,189,248,.16); color: var(--accent); }
-  .tag.tool { background: rgba(129,140,248,.16); color: var(--accent-2); }
-  .tag.live { background: rgba(74,222,128,.14); color: var(--ok); }
+  .tag.star { background: var(--lh-bg-cb7-a16b); color: var(--lh-ink-cb7b); }
+  .tag.tool { background: var(--lh-bg-b6-a16b); color: var(--lh-ink-b6c); }
+  .tag.live { background: var(--lh-bg-g7-a14b); color: var(--lh-ink-g7b); }
 
   .order { counter-reset: st; margin-top: 10px; }
   .order li {
@@ -156,17 +157,17 @@
     position: absolute; left: 6px; top: 10px;
     width: 26px; height: 26px;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--accent), var(--accent-2));
-    color: #0b1220;
+    background: linear-gradient(135deg, var(--lh-bg-cb7b), var(--lh-bg-b6b));
+    color: var(--lh-ink-n1c);
     font-weight: 700;
     font-size: 13px;
     display: flex; align-items: center; justify-content: center;
   }
-  .order code { font-family: var(--mono); color: var(--accent); }
+  .order code { font-family: var(--mono); color: var(--lh-ink-cb7b); }
   .order b { color: var(--ink); }
 
   pre.cmd {
-    background: #0b1220;
+    background: var(--lh-bg-n1b);
     border: 1px solid var(--rule);
     border-radius: 9px;
     padding: 13px 16px;
@@ -177,17 +178,17 @@
     margin-top: 10px;
   }
   pre.cmd .c { color: var(--ink-dim); }
-  pre.cmd .k { color: var(--accent); }
-  pre.cmd .w { color: var(--warn); }
+  pre.cmd .k { color: var(--lh-ink-cb7b); }
+  pre.cmd .w { color: var(--lh-ink-o7b); }
   .note {
     margin-top: 12px; padding: 10px 14px;
-    border-left: 3px solid var(--warn);
-    background: rgba(251,191,36,.07);
+    border-left: 3px solid var(--lh-line-o7b);
+    background: var(--lh-bg-o7-a7b);
     border-radius: 0 8px 8px 0;
     font-size: 12.5px;
     color: var(--ink-muted);
   }
-  .note b { color: var(--warn); }
+  .note b { color: var(--lh-ink-o7b); }
 
   .ledger { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 12px; }
   .ledger > div {
@@ -196,14 +197,17 @@
     padding: 14px 16px;
     font-size: 13px;
     color: var(--ink-muted);
-    background: rgba(15,23,42,.5);
+    background: var(--lh-bg-b2-a50b);
   }
   .ledger b { display: block; margin-bottom: 6px; font-size: 14px; }
-  .ledger .est b { color: var(--bad); }
-  .ledger .real b { color: var(--ok); }
+  .ledger .est b { color: var(--lh-ink-r6b); }
+  .ledger .real b { color: var(--lh-ink-g7b); }
   .ledger .big { font-family: var(--mono); font-size: 18px; color: var(--ink); }
   @media (max-width: 720px) { .ledger { grid-template-columns: 1fr; } }
 </style>
+
+<link rel="stylesheet" href="../assets/theme.css">
+<script src="../assets/theme.js" defer></script>
 </head>
 <body>
 <div class="container">
@@ -328,9 +332,9 @@
   </div>
 
   <div style="margin-top:34px;padding-top:14px;border-top:1px solid var(--line);color:var(--ink-dim);font-size:.85rem;text-align:center">
-    第 5 关 · 结丹期 · 查询内幕 ｜ 上一关：<a href="../cpp_integration/index.html" style="color:var(--accent)">第 4 关 · 兵器期（C++ 接入数据库）</a> ｜
-    下一关：<a href="../nosql_distributed/index.html" style="color:var(--accent)">第 6 关 · 轻剑期（NoSQL 与分布式）</a> ｜
-    <a href="../数据库学习路线图.html" style="color:var(--accent)">返回总路线图</a>
+    第 5 关 · 结丹期 · 查询内幕 ｜ 上一关：<a href="../cpp_integration/index.html" style="color:var(--lh-ink-cb7b)">第 4 关 · 兵器期（C++ 接入数据库）</a> ｜
+    下一关：<a href="../nosql_distributed/index.html" style="color:var(--lh-ink-cb7b)">第 6 关 · 轻剑期（NoSQL 与分布式）</a> ｜
+    <a href="../数据库学习路线图.html" style="color:var(--lh-ink-cb7b)">返回总路线图</a>
   </div>
 
 </div>

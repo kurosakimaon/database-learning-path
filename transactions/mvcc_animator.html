@@ -3,13 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>(function(){var d=document.documentElement,p="auto",t;try{p=localStorage.getItem("lh-theme")||"auto";}catch(e){}if(p!=="light"&&p!=="dark")p="auto";try{t=p==="auto"?(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark"):p;}catch(e){t="dark";}d.setAttribute("data-theme",t);d.setAttribute("data-theme-pref",p);})();</script>
 <title>MVCC 版本链动画 · 第 3 关</title>
 <style>
   :root {
-    --bg: #0f172a; --bg2: #1e293b; --line: #334155;
-    --ink: #e2e8f0; --dim: #94a3b8;
-    --blue: #38bdf8; --indigo: #818cf8; --green: #34d399;
-    --amber: #fbbf24; --red: #f87171;
+    --bg: var(--lh-bg-b2b); --bg2: var(--lh-bg-b2c); --line: var(--lh-line-b3b);
+    --ink: var(--lh-ink-n8b); --dim: var(--lh-ink-b6b);
+    --blue: var(--lh-acc-cb7b); --indigo: var(--lh-acc-b6b); --green: var(--lh-acc-tg7b);
+    --amber: var(--lh-acc-o7b); --red: var(--lh-ink-r6b);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -18,7 +19,7 @@
     min-height: 100vh; padding: 20px 24px 40px;
   }
   h1 { font-size: 20px; margin-bottom: 4px; }
-  h1 .tag { color: var(--blue); }
+  h1 .tag { color: var(--lh-ink-cb7b); }
   .sub { color: var(--dim); font-size: 13px; margin-bottom: 16px; }
   .bar {
     display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
@@ -26,66 +27,69 @@
     border-radius: 10px; padding: 10px 12px; margin-bottom: 16px;
   }
   button {
-    background: #0b1220; color: var(--ink); border: 1px solid var(--line);
+    background: var(--lh-bg-n1b); color: var(--ink); border: 1px solid var(--line);
     border-radius: 8px; padding: 7px 12px; cursor: pointer; font-size: 13px;
     transition: all .15s;
   }
-  button:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }
+  button:hover:not(:disabled) { border-color: var(--lh-line-cb7b); color: var(--lh-ink-cb7b); }
   button:disabled { opacity: .35; cursor: not-allowed; }
-  button.t1 { border-color: #1d4ed8aa; }
-  button.t2 { border-color: #7c3aedaa; }
+  button.t1 { border-color: var(--lh-line-b4-a67b); }
+  button.t2 { border-color: var(--lh-line-p4-a67b); }
   .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
   .seg button { border: none; border-radius: 0; }
-  .seg button.on { background: var(--blue); color: #06121f; font-weight: 600; }
+  .seg button.on { background: var(--lh-bg-cb7b); color: var(--lh-ink-cb1b); font-weight: 600; }
   .seg .lab { padding: 7px 10px; color: var(--dim); font-size: 12px; align-self: center; }
-  .sep { width: 1px; height: 26px; background: var(--line); margin: 0 4px; }
+  .sep { width: 1px; height: 26px; background: var(--lh-bg-b3c); margin: 0 4px; }
   .cols { display: grid; grid-template-columns: 380px 1fr; gap: 16px; }
   @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
   .panel {
     background: var(--bg2); border: 1px solid var(--line);
     border-radius: 12px; padding: 14px 16px;
   }
-  .panel h2 { font-size: 14px; color: var(--blue); margin-bottom: 10px; }
+  .panel h2 { font-size: 14px; color: var(--lh-ink-cb7b); margin-bottom: 10px; }
   .chainwrap svg { width: 100%; height: auto; display: block; }
   .tlrow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-height: 40px; margin-bottom: 8px; }
   .tlname { width: 44px; font-weight: 700; flex: none; }
-  .tlname.t1 { color: #60a5fa; } .tlname.t2 { color: var(--indigo); }
+  .tlname.t1 { color: var(--lh-ink-cb6c); } .tlname.t2 { color: var(--lh-ink-b6c); }
   .ev {
     border-radius: 7px; padding: 3px 9px; font-size: 12px;
-    border: 1px solid var(--line); background: #0b1220; color: var(--dim);
+    border: 1px solid var(--line); background: var(--lh-bg-n1b); color: var(--dim);
   }
-  .ev.hit { border-color: var(--green); color: var(--green); }
-  .arrow { color: var(--line); }
+  .ev.hit { border-color: var(--lh-line-tg7b); color: var(--lh-ink-tg7b); }
+  .arrow { color: var(--lh-ink-b3b); }
   .viewbox {
-    margin-top: 10px; border: 1px dashed var(--indigo); border-radius: 10px;
-    padding: 8px 12px; font-size: 12px; color: var(--dim); background: #131b2e;
+    margin-top: 10px; border: 1px dashed var(--lh-line-b6b); border-radius: 10px;
+    padding: 8px 12px; font-size: 12px; color: var(--dim); background: var(--lh-bg-b2p);
   }
-  .viewbox b { color: var(--indigo); }
+  .viewbox b { color: var(--lh-ink-b6c); }
   #log {
-    margin-top: 14px; background: #0b1220; border: 1px solid var(--line);
+    margin-top: 14px; background: var(--lh-bg-n1b); border: 1px solid var(--line);
     border-radius: 10px; padding: 10px 12px; height: 200px; overflow-y: auto;
     font-size: 12.5px; font-family: Consolas, "Courier New", monospace;
   }
   #log p { margin: 1px 0; color: var(--dim); }
-  #log p.t1 { color: #60a5fa; } #log p.t2 { color: var(--indigo); }
-  #log p.sys { color: var(--green); } #log p.warn { color: var(--amber); }
+  #log p.t1 { color: var(--lh-ink-cb6c); } #log p.t2 { color: var(--lh-ink-b6c); }
+  #log p.sys { color: var(--lh-ink-tg7b); } #log p.warn { color: var(--lh-ink-o7b); }
   .explain {
-    margin-top: 10px; border-left: 3px solid var(--amber); padding: 6px 10px;
-    background: #1a2236; border-radius: 0 8px 8px 0; font-size: 13px; color: #fde68a;
+    margin-top: 10px; border-left: 3px solid var(--lh-line-o7b); padding: 6px 10px;
+    background: var(--lh-bg-b2f); border-radius: 0 8px 8px 0; font-size: 13px; color: var(--lh-ink-o8b);
     min-height: 34px;
   }
   .explain code {
-    font-family: Consolas, "Courier New", monospace; font-size: 12.5px; color: #a5f3fc;
-    background: #0b1220; border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px;
+    font-family: Consolas, "Courier New", monospace; font-size: 12.5px; color: var(--lh-ink-tc8b);
+    background: var(--lh-bg-n1b); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px;
   }
   .foot { margin-top: 22px; color: var(--dim); font-size: 13px; line-height: 2; }
   .foot b { color: var(--ink); }
   .foot code {
-    font-family: Consolas, "Courier New", monospace; font-size: 12.5px; color: #a5f3fc;
-    background: #0b1220; border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px;
+    font-family: Consolas, "Courier New", monospace; font-size: 12.5px; color: var(--lh-ink-tc8b);
+    background: var(--lh-bg-n1b); border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px;
   }
   .foot .gap { display: block; margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line); }
 </style>
+
+<link rel="stylesheet" href="../assets/theme.css">
+<script src="../assets/theme.js" defer></script>
 </head>
 <body>
 <h1>MVCC 版本链实验室 <span class="tag">—— 快照 = 顺着 undo 链往回找第一个"对我可见"的版本</span></h1>

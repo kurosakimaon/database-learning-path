@@ -3,21 +3,22 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>(function(){var d=document.documentElement,p="auto",t;try{p=localStorage.getItem("lh-theme")||"auto";}catch(e){}if(p!=="light"&&p!=="dark")p="auto";try{t=p==="auto"?(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark"):p;}catch(e){t="dark";}d.setAttribute("data-theme",t);d.setAttribute("data-theme-pref",p);})();</script>
 <title>第 4 关 · 兵器期：C++ 连接数据库 · 导航</title>
 <style>
   :root {
-    --bg: #0f172a;
-    --surface: #1e293b;
-    --surface-2: #334155;
-    --ink: #f1f5f9;
-    --ink-muted: #94a3b8;
-    --ink-dim: #64748b;
-    --rule: #334155;
-    --accent: #38bdf8;
-    --accent-2: #818cf8;
-    --ok: #4ade80;
-    --warn: #fbbf24;
-    --bad: #f87171;
+    --bg: var(--lh-bg-b2b);
+    --surface: var(--lh-bg-b2c);
+    --surface-2: var(--lh-bg-b3c);
+    --ink: var(--lh-ink-n9b);
+    --ink-muted: var(--lh-ink-b6b);
+    --ink-dim: var(--lh-ink-b5b);
+    --rule: var(--lh-line-b3b);
+    --accent: var(--lh-acc-cb7b);
+    --accent-2: var(--lh-acc-b6b);
+    --ok: var(--lh-acc-g7b);
+    --warn: var(--lh-acc-o7b);
+    --bad: var(--lh-acc-r6b);
     --mono: "Consolas", "Cascadia Mono", "Courier New", ui-monospace, monospace;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -33,7 +34,7 @@
   .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px; }
   header h1 {
     font-size: 1.75rem;
-    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    background: linear-gradient(135deg, var(--lh-bg-cb7b), var(--lh-bg-b6b));
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
@@ -43,15 +44,15 @@
   header .badge {
     display: inline-block; margin-top: 10px; margin-right: 8px;
     padding: 3px 10px; border-radius: 999px; font-size: .76rem;
-    background: rgba(56,189,248,.12); color: var(--accent);
-    border: 1px solid rgba(56,189,248,.3);
+    background: var(--lh-bg-cb7-a12b); color: var(--lh-ink-cb7b);
+    border: 1px solid var(--lh-line-cb7-a30b);
     font-family: var(--mono);
   }
-  header .badge.warn { background: rgba(251,191,36,.12); color: var(--warn); border-color: rgba(251,191,36,.3); }
+  header .badge.warn { background: var(--lh-bg-o7-a12b); color: var(--lh-ink-o7b); border-color: var(--lh-line-o7-a30b); }
   section { margin-top: 30px; }
   h2 {
-    font-size: 1.1rem; color: var(--accent);
-    padding-left: 11px; border-left: 3px solid var(--accent-2);
+    font-size: 1.1rem; color: var(--lh-ink-cb7b);
+    padding-left: 11px; border-left: 3px solid var(--lh-line-b6b);
     margin-bottom: 14px;
   }
   .card {
@@ -65,28 +66,28 @@
     border-radius: 10px; padding: 14px 16px; margin-bottom: 12px;
     transition: border-color .15s, transform .15s;
   }
-  a.file:hover { border-color: var(--accent); transform: translateY(-2px); }
-  a.file .name { font-family: var(--mono); color: var(--accent); font-size: .95rem; font-weight: 600; }
+  a.file:hover { border-color: var(--lh-line-cb7b); transform: translateY(-2px); }
+  a.file .name { font-family: var(--mono); color: var(--lh-ink-cb7b); font-size: .95rem; font-weight: 600; }
   a.file .tag {
     float: right; font-size: .72rem; padding: 2px 8px; border-radius: 999px;
     background: var(--surface-2); color: var(--ink-muted); font-family: var(--mono);
   }
-  a.file .tag.no { background: rgba(251,191,36,.14); color: var(--warn); }
+  a.file .tag.no { background: var(--lh-bg-o7-a14b); color: var(--lh-ink-o7b); }
   a.file .desc { color: var(--ink-muted); margin-top: 6px; font-size: .87rem; }
   a.file .must { color: var(--ink-dim); margin-top: 8px; font-size: .82rem; }
-  a.file .must b { color: var(--accent-2); font-weight: 600; }
+  a.file .must b { color: var(--lh-ink-b6c); font-weight: 600; }
   pre {
-    background: #0b1220; border: 1px solid var(--rule); border-radius: 8px;
+    background: var(--lh-bg-n1b); border: 1px solid var(--rule); border-radius: 8px;
     padding: 13px 15px; overflow-x: auto; font-family: var(--mono);
-    font-size: .83rem; line-height: 1.75; color: #cbd5e1;
+    font-size: .83rem; line-height: 1.75; color: var(--lh-ink-cb8b);
   }
   pre .c { color: var(--ink-dim); }
-  pre .k { color: var(--accent); }
-  pre .w { color: var(--warn); }
-  pre .g { color: var(--ok); }
+  pre .k { color: var(--lh-ink-cb7b); }
+  pre .w { color: var(--lh-ink-o7b); }
+  pre .g { color: var(--lh-ink-g7b); }
   table { width: 100%; border-collapse: collapse; font-size: .87rem; }
   th, td { padding: 9px 11px; border-bottom: 1px solid var(--rule); text-align: left; vertical-align: top; }
-  th { color: var(--accent); font-weight: 600; background: rgba(56,189,248,.06); }
+  th { color: var(--lh-ink-cb7b); font-weight: 600; background: var(--lh-bg-cb7-a6b); }
   td.mono, th.mono { font-family: var(--mono); font-size: .82rem; }
   td.num { font-family: var(--mono); text-align: right; }
   .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0 2px; }
@@ -94,17 +95,20 @@
     background: var(--surface-2); border: 1px solid var(--rule); border-radius: 8px;
     padding: 7px 12px; font-family: var(--mono); font-size: .8rem; color: var(--ink);
   }
-  .flow .arr { color: var(--accent-2); font-size: 1rem; }
-  .flow .step.bad { border-color: rgba(248,113,113,.5); color: var(--bad); }
+  .flow .arr { color: var(--lh-ink-b6c); font-size: 1rem; }
+  .flow .step.bad { border-color: var(--lh-line-r6-a50b); color: var(--lh-ink-r6b); }
   .note {
-    border-left: 3px solid var(--warn); background: rgba(251,191,36,.07);
-    padding: 11px 14px; border-radius: 0 8px 8px 0; color: #e2e8f0; font-size: .88rem;
+    border-left: 3px solid var(--lh-line-o7b); background: var(--lh-bg-o7-a7b);
+    padding: 11px 14px; border-radius: 0 8px 8px 0; color: var(--lh-ink-n8b); font-size: .88rem;
   }
-  .note.bad { border-left-color: var(--bad); background: rgba(248,113,113,.07); }
-  .note.ok { border-left-color: var(--ok); background: rgba(74,222,128,.07); }
-  .measured { color: var(--ok); font-family: var(--mono); }
+  .note.bad { border-left-color: var(--lh-line-r6b); background: var(--lh-bg-r6-a7b); }
+  .note.ok { border-left-color: var(--lh-line-g7b); background: var(--lh-bg-g7-a7b); }
+  .measured { color: var(--lh-ink-g7b); font-family: var(--mono); }
   .foot { margin-top: 34px; color: var(--ink-dim); font-size: .82rem; text-align: center; }
 </style>
+
+<link rel="stylesheet" href="../assets/theme.css">
+<script src="../assets/theme.js" defer></script>
 </head>
 <body>
 <div class="wrap">
@@ -131,7 +135,7 @@
       <span class="step">03 连接池 + 并发</span><span class="arr">→</span>
       <span class="step">04 MySQL / ORM 边界</span>
     </div>
-    <p style="margin-top:10px;color:var(--ink-muted)">完整讲解、实测数据、七条课后练习在同目录 <b style="color:var(--accent)">tutorial.md</b>。这个页面只做导航和命令速查。</p>
+    <p style="margin-top:10px;color:var(--ink-muted)">完整讲解、实测数据、七条课后练习在同目录 <b style="color:var(--lh-ink-cb7b)">tutorial.md</b>。这个页面只做导航和命令速查。</p>
   </div>
 </section>
 
